@@ -11,10 +11,28 @@
     <a class="skip" href="#app">Skip to content</a>
     <header>
       <a class="brand" href="index.html"
-        ><img src="logo.svg" alt="" /> Bareline <small>interactive demo</small></a
+        ><svg class="logo" viewBox="0 0 40 40" aria-hidden="true">
+          <rect width="40" height="40" rx="7" fill="#236b5b" />
+          <path
+            d="M13 8v24m0-12c0-4 3.2-6.5 7.2-6.5H27"
+            fill="none"
+            stroke="#f6f4ec"
+            stroke-width="3"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          <circle cx="13" cy="8" r="2.7" fill="#f6f4ec" />
+          <circle cx="13" cy="20" r="2.7" fill="#f6f4ec" />
+          <circle cx="13" cy="32" r="2.7" fill="#f6f4ec" />
+          <circle cx="27" cy="13.5" r="2.7" fill="#f6f4ec" />
+        </svg>
+        Bareline <small>interactive demo</small></a
       >
       <nav>
-        <button id="search">Search <kbd>⌘ K</kbd></button
+        <button data-global="home">Home</button><button data-global="explore">Explore</button
+        ><button data-global="docs">Docs</button><button data-global="groups">Groups</button
+        ><button data-global="admin">Admin</button><button id="search">Search <kbd>⌘ K</kbd></button
+        ><button data-global="account">Alice</button><button data-global="logout">Log out</button
         ><button id="theme" aria-label="Toggle theme">◐</button>
       </nav>
     </header>
@@ -23,22 +41,26 @@
         <strong>Demo account: Alice Nguyen.</strong> This is local sample data; commits and settings
         are saved only in your browser. <button id="reset">Reset</button>
       </p>
-      <section class="repo">
-        <div>
-          <span>PUBLIC REPOSITORY</span>
-          <h1>alice <i>/</i> paper-trail</h1>
-          <p>A small, durable record of decisions.</p>
-        </div>
-        <div>
-          <button id="clone">Clone</button> <button class="primary" id="new-file">New file</button>
-        </div>
+      <section id="home-view" hidden></section>
+      <section id="repository-view">
+        <section class="repo">
+          <div>
+            <span>PUBLIC REPOSITORY</span>
+            <h1>alice <i>/</i> paper-trail</h1>
+            <p>A small, durable record of decisions.</p>
+          </div>
+          <div>
+            <button id="clone">Clone</button>
+            <button class="primary" id="new-file">New file</button>
+          </div>
+        </section>
+        <nav class="tabs">
+          <button data-view="code">Code</button><button data-view="commits">Commits</button
+          ><button data-view="branches">Branches</button><button data-view="tags">Tags</button
+          ><button data-view="compare">Compare</button>
+        </nav>
+        <section id="view" aria-live="polite"></section>
       </section>
-      <nav class="tabs">
-        <button data-view="code">Code</button><button data-view="commits">Commits</button
-        ><button data-view="branches">Branches</button><button data-view="tags">Tags</button
-        ><button data-view="compare">Compare</button>
-      </nav>
-      <section id="view" aria-live="polite"></section>
     </main>
     <dialog id="modal">
       <form method="dialog">

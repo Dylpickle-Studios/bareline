@@ -46,6 +46,8 @@ const app = document.querySelector('#view');
 const modal = document.querySelector('#modal');
 const title = document.querySelector('#modal-title');
 const body = document.querySelector('#modal-content');
+const homeView = document.querySelector('#home-view');
+const repositoryView = document.querySelector('#repository-view');
 const escape = (value) =>
   String(value).replace(
     /[&<>"']/g,
@@ -248,6 +250,45 @@ function palette() {
   query.oninput = update;
   update();
 }
+function showHome(signedOut = false) {
+  repositoryView.hidden = true;
+  homeView.hidden = false;
+  homeView.innerHTML = signedOut
+    ? `<section class="card home-card"><div class="markdown"><h2>You are signed out</h2><p>This demo does not use a server session. Sign back in as Alice to continue exploring its local sample data.</p><button class="primary" id="sign-in">Sign in as Alice</button></div></section>`
+    : `<section class="card home-card"><div class="markdown"><p class="eyebrow">Your home</p><h2>Welcome back, Alice.</h2><p>One repository is ready to browse in this interactive demo.</p></div><ul class="list"><li class="row"><span class="folder">▰</span><button class="name" id="open-repository"><strong>alice / paper-trail</strong><br><small>A small, durable record of decisions.</small></button><small>Public · updated ${latest().time}</small></li></ul></section>`;
+  document.querySelector('#open-repository')?.addEventListener('click', showRepository);
+  document.querySelector('#sign-in')?.addEventListener('click', () => showHome());
+}
+function showRepository() {
+  homeView.hidden = true;
+  repositoryView.hidden = false;
+  render();
+}
+function globalAction(action) {
+  if (action === 'home') return showHome();
+  if (action === 'explore') return showHome();
+  if (action === 'docs')
+    return openModal(
+      'Documentation',
+      '<p class="muted">Getting Started, Git Basics, SSH keys, HTTPS authentication, backups, and plugins are available in the full Bareline documentation.</p>',
+    );
+  if (action === 'groups')
+    return openModal(
+      'Groups',
+      '<p class="muted">Alice belongs to the demo group <strong>paper-trail</strong>. Group management is represented here because this static demo has no multi-user backend.</p>',
+    );
+  if (action === 'admin')
+    return openModal(
+      'Administration',
+      '<p class="muted">In Bareline, administrators manage users, repositories, plugins, audit logs, search, and authentication. The full administration interface requires the server.</p>',
+    );
+  if (action === 'account')
+    return openModal(
+      'Alice Nguyen',
+      '<p class="muted">Account settings include profile, appearance, sessions, SSH keys, passkeys, and personal access tokens.</p>',
+    );
+  if (action === 'logout') return showHome(true);
+}
 document.querySelectorAll('[data-view]').forEach((button) => {
   button.onclick = () => {
     state.view = button.dataset.view;
@@ -263,6 +304,9 @@ document.querySelector('#clone').onclick = () =>
     '<label>HTTPS<input readonly value="https://demo.bareline.dev/alice/paper-trail.git"></label><label>SSH<input readonly value="git@demo.bareline.dev:alice/paper-trail.git"></label>',
   );
 document.querySelector('#theme').onclick = () => document.documentElement.classList.toggle('dark');
+document.querySelectorAll('[data-global]').forEach((button) => {
+  button.onclick = () => globalAction(button.dataset.global);
+});
 document.querySelector('#reset').onclick = () => {
   state = structuredClone(seed);
   save();

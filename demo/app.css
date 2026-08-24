@@ -59,17 +59,11 @@ header nav {
   font-weight: 800;
   letter-spacing: -0.04em;
 }
-.brand img {
-  display: inline-grid;
-  place-items: center;
+.brand .logo {
+  display: inline-block;
+  vertical-align: middle;
   width: 28px;
   height: 28px;
-  border-radius: 6px;
-  background: var(--accent);
-  color: white;
-  font:
-    700 18px Georgia,
-    serif;
 }
 .brand small {
   font:
@@ -383,7 +377,7 @@ textarea {
     padding-inline: 16px;
   }
   .brand small,
-  header nav button:first-child {
+  header nav button[data-global]:not([data-global='home']) {
     display: none;
   }
   .latest,
