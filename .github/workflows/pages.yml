@@ -25,7 +25,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/configure-pages@v5
+      # A repository administrator can add this fine-grained token with Pages write and
+      # Administration write permissions to enable Pages on the first run. GITHUB_TOKEN cannot
+      # create a Pages site, so normal deployments keep using the least-privileged token.
+      - if: ${{ secrets.PAGES_ADMIN_TOKEN != '' }}
+        uses: actions/configure-pages@v6
+        with:
+          enablement: true
+          token: ${{ secrets.PAGES_ADMIN_TOKEN }}
+      - if: ${{ secrets.PAGES_ADMIN_TOKEN == '' }}
+        uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v3
         with:
           path: demo
