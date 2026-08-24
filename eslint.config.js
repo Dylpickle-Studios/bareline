@@ -11,6 +11,7 @@ export default tseslint.config(
       'data/**',
       'eslint.config.js',
       'scripts/**',
+      'demo/**/*.js',
       'src/web/assets/**/*.js',
       'src/plugins/**/*.mjs',
       'plugins/**/*.mjs',

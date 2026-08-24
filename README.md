@@ -27,7 +27,9 @@ work, not deferred aspirations.
 
 The `Deploy design preview` workflow publishes the static interface preview from `demo/` to GitHub
 Pages when changes land on `main`. Enable **Settings → Pages → Source: GitHub Actions** once, then
-visit `https://OWNER.github.io/REPOSITORY/`.
+visit `https://OWNER.github.io/REPOSITORY/`. As an alternative, set a `PAGES_ADMIN_TOKEN` Actions
+secret with **Pages: write** and **Administration: write** permissions; the workflow will enable the
+site on its first run. The standard repository `GITHUB_TOKEN` cannot create a Pages site.
 
 The `Publish container image` workflow publishes `ghcr.io/OWNER/REPOSITORY` from `main` and `v*`
 tags. It attaches build provenance and an SBOM. Pull a specific tagged release rather than relying

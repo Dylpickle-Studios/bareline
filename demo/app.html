@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Interactive Bareline demo with seeded Git data." />
+    <title>Bareline interactive demo</title>
+    <link rel="stylesheet" href="app.css" />
+  </head>
+  <body>
+    <a class="skip" href="#app">Skip to content</a>
+    <header>
+      <a class="brand" href="index.html"><b>B</b> Bareline <small>interactive demo</small></a>
+      <nav>
+        <button id="search">Search <kbd>⌘ K</kbd></button
+        ><button id="theme" aria-label="Toggle theme">◐</button>
+      </nav>
+    </header>
+    <main id="app">
+      <p class="notice">
+        <strong>Demo account: Alice Nguyen.</strong> This is local sample data; commits and settings
+        are saved only in your browser. <button id="reset">Reset</button>
+      </p>
+      <section class="repo">
+        <div>
+          <span>PUBLIC REPOSITORY</span>
+          <h1>alice <i>/</i> paper-trail</h1>
+          <p>A small, durable record of decisions.</p>
+        </div>
+        <div>
+          <button id="clone">Clone</button> <button class="primary" id="new-file">New file</button>
+        </div>
+      </section>
+      <nav class="tabs">
+        <button data-view="code">Code</button><button data-view="commits">Commits</button
+        ><button data-view="branches">Branches</button><button data-view="tags">Tags</button
+        ><button data-view="compare">Compare</button>
+      </nav>
+      <section id="view" aria-live="polite"></section>
+    </main>
+    <dialog id="modal">
+      <form method="dialog">
+        <header><strong id="modal-title">Bareline demo</strong><button>Close</button></header>
+        <div id="modal-content"></div>
+      </form>
+    </dialog>
+    <script src="app.js"></script>
+  </body>
+</html>

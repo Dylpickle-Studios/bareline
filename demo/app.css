@@ -1,0 +1,394 @@
+:root {
+  --ink: #18211f;
+  --muted: #64706b;
+  --line: #dbe2dd;
+  --paper: #f7f7f3;
+  --surface: #fff;
+  --accent: #236b5b;
+  --pale: #e6f1ed;
+  --plus: #dff4e9;
+  --minus: #f9e2e1;
+}
+html.dark {
+  --ink: #e8eee9;
+  --muted: #a7b4ac;
+  --line: #34423c;
+  --paper: #17201d;
+  --surface: #1d2925;
+  --pale: #1d3d33;
+  --plus: #184634;
+  --minus: #4b282b;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font:
+    15px/1.5 Inter,
+    system-ui,
+    sans-serif;
+}
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+button {
+  cursor: pointer;
+}
+header {
+  height: 64px;
+  padding: 0 max(20px, calc((100vw - 1120px) / 2));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+}
+header nav {
+  display: flex;
+  gap: 10px;
+}
+.brand {
+  color: inherit;
+  text-decoration: none;
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+.brand b {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: white;
+  font:
+    700 18px Georgia,
+    serif;
+}
+.brand small {
+  font:
+    12px ui-monospace,
+    monospace;
+  color: var(--muted);
+  letter-spacing: 0;
+}
+header button,
+.tabs button,
+#reset {
+  border: 0;
+  background: none;
+  color: var(--muted);
+}
+kbd {
+  padding: 2px 5px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font:
+    11px ui-monospace,
+    monospace;
+}
+.skip {
+  position: absolute;
+  transform: translateY(-200%);
+}
+.skip:focus {
+  transform: none;
+}
+main {
+  max-width: 1120px;
+  margin: auto;
+  padding: 22px 24px 50px;
+}
+.notice {
+  padding: 10px 13px;
+  background: var(--pale);
+  border-left: 3px solid var(--accent);
+  font-size: 13px;
+}
+.repo {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  margin: 25px 0;
+}
+.repo span {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+.repo h1 {
+  margin: 3px 0;
+  font-size: 30px;
+  letter-spacing: -0.05em;
+}
+.repo h1 i {
+  color: var(--muted);
+  font-style: normal;
+}
+.repo p {
+  margin: 0;
+  color: var(--muted);
+}
+.primary,
+main > section button {
+  padding: 8px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 650;
+}
+.repo > div:last-child button:first-child {
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+}
+.tabs {
+  display: flex;
+  gap: 21px;
+  border-bottom: 1px solid var(--line);
+  overflow: auto;
+}
+.tabs button {
+  padding: 10px 0 8px;
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+}
+.tabs button.active {
+  border-color: var(--accent);
+  color: var(--ink);
+  font-weight: 750;
+}
+.bar,
+.latest,
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 13px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.bar {
+  margin-top: 16px;
+  border-radius: 7px 7px 0 0;
+  background: #f4f8f5;
+}
+.latest {
+  border-top: 0;
+  font-size: 13px;
+}
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-top: 0;
+  border-radius: 0 0 7px 7px;
+  background: var(--surface);
+}
+.row {
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+.row button {
+  border: 0;
+  background: none;
+  color: var(--ink);
+  text-align: left;
+}
+.row button:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.name {
+  flex: 1;
+  font-family: ui-monospace, monospace;
+}
+.muted,
+small {
+  color: var(--muted);
+}
+.folder,
+.sha {
+  color: var(--accent);
+}
+.card {
+  margin-top: 16px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  overflow: hidden;
+  background: var(--surface);
+}
+.card header {
+  height: auto;
+  padding: 10px 13px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+.markdown {
+  padding: 20px;
+}
+.markdown h2 {
+  margin-top: 0;
+}
+.markdown p {
+  color: var(--muted);
+}
+pre {
+  margin: 0;
+  padding: 15px;
+  overflow: auto;
+  font:
+    13px/1.65 ui-monospace,
+    monospace;
+}
+.n {
+  display: inline-block;
+  width: 34px;
+  color: var(--muted);
+}
+.diff {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font:
+    13px/1.6 ui-monospace,
+    monospace;
+}
+.diff li {
+  padding: 0 13px;
+  white-space: pre-wrap;
+}
+.plus {
+  background: var(--plus);
+  color: #164c38;
+}
+.minus {
+  background: var(--minus);
+  color: #782f31;
+}
+.stats {
+  font:
+    13px ui-monospace,
+    monospace;
+}
+.add {
+  color: #267758;
+}
+.del {
+  color: #b64f4e;
+}
+dialog {
+  width: min(580px, calc(100vw - 28px));
+  border: 0;
+  border-radius: 8px;
+  padding: 0;
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: 0 20px 70px #0007;
+}
+dialog::backdrop {
+  background: #10201c88;
+}
+dialog form > header {
+  padding: 13px 16px;
+  height: auto;
+}
+dialog header button {
+  border: 0;
+  background: none;
+  color: var(--muted);
+}
+#modal-content {
+  padding: 16px;
+}
+label {
+  display: block;
+  margin: 10px 0;
+  font-weight: 650;
+  font-size: 13px;
+}
+input,
+textarea,
+select {
+  width: 100%;
+  margin-top: 4px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--paper);
+  color: var(--ink);
+}
+textarea {
+  min-height: 180px;
+  font:
+    13px/1.55 ui-monospace,
+    monospace;
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+.modal-actions button {
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+}
+.modal-actions .primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+.result {
+  display: block;
+  width: 100%;
+  padding: 10px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: none;
+  text-align: left;
+  color: var(--ink);
+}
+@media (max-width: 650px) {
+  main {
+    padding-inline: 16px;
+  }
+  .repo {
+    flex-direction: column;
+  }
+  .repo > div:last-child {
+    display: flex;
+    gap: 8px;
+  }
+  .repo > div:last-child button {
+    flex: 1;
+  }
+  header {
+    padding-inline: 16px;
+  }
+  .brand small,
+  header nav button:first-child {
+    display: none;
+  }
+  .latest,
+  .bar {
+    align-items: start;
+    flex-wrap: wrap;
+  }
+}
