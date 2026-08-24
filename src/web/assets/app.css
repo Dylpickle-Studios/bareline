@@ -622,6 +622,9 @@ fieldset {
 }
 #palette-results a {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 1rem;
   padding: 0.7rem;
   color: inherit;
   text-decoration: none;
@@ -634,6 +637,8 @@ fieldset {
 #palette-results span {
   color: var(--muted);
   font-size: 0.82rem;
+  text-align: end;
+  white-space: nowrap;
 }
 .diff-toolbar {
   display: flex;
@@ -1278,6 +1283,14 @@ dialog::backdrop {
 }
 
 @media (max-width: 700px) {
+  #palette-results a {
+    grid-template-columns: 1fr;
+    gap: 0.15rem;
+  }
+  #palette-results span {
+    text-align: start;
+    white-space: normal;
+  }
   .site-footer {
     align-items: flex-start;
     flex-direction: column;

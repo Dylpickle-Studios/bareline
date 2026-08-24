@@ -98,8 +98,8 @@ kbd {
 }
 main {
   flex: 1 0 auto;
-  max-width: 1120px;
-  margin: auto;
+  width: min(1120px, 100%);
+  margin-inline: auto;
   padding: 22px 24px 50px;
 }
 .activity-link {
@@ -127,10 +127,10 @@ main {
 footer {
   flex: 0 0 auto;
   display: flex;
-  max-width: 1120px;
+  width: min(1120px, 100%);
   align-items: center;
   gap: 12px;
-  margin: 50px auto 0;
+  margin-inline: auto;
   padding: 18px 24px;
   border-top: 1px solid var(--line);
   color: var(--muted);
@@ -734,7 +734,10 @@ textarea {
   color: white;
 }
 .result {
-  display: block;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 16px;
   width: 100%;
   padding: 10px 0;
   border: 0;
@@ -743,7 +746,19 @@ textarea {
   text-align: left;
   color: var(--ink);
 }
+.result small {
+  text-align: right;
+  white-space: nowrap;
+}
 @media (max-width: 650px) {
+  .result {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+  .result small {
+    text-align: left;
+    white-space: normal;
+  }
   main {
     padding-inline: 16px;
   }
