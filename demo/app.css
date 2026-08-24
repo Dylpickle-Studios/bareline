@@ -29,6 +29,7 @@ body {
   display: flex;
   min-height: 100vh;
   flex-direction: column;
+  padding-bottom: 58px;
   margin: 0;
   background: var(--paper);
   color: var(--ink);
@@ -56,6 +57,7 @@ header {
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid var(--line);
+  background: var(--paper);
 }
 header nav {
   display: flex;
@@ -125,6 +127,11 @@ main {
   color: var(--ink);
 }
 footer {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  z-index: 10;
+  transform: translateX(-50%);
   flex: 0 0 auto;
   display: flex;
   width: min(1120px, 100%);
@@ -133,6 +140,7 @@ footer {
   margin-inline: auto;
   padding: 18px 24px;
   border-top: 1px solid var(--line);
+  background: var(--paper);
   color: var(--muted);
   font-size: 12px;
 }
@@ -751,6 +759,9 @@ textarea {
   white-space: nowrap;
 }
 @media (max-width: 650px) {
+  body {
+    padding-bottom: 96px;
+  }
   .result {
     grid-template-columns: 1fr;
     gap: 2px;
@@ -831,5 +842,11 @@ textarea {
   .audit p {
     align-items: flex-start;
     flex-direction: column;
+  }
+  footer {
+    flex-wrap: wrap;
+  }
+  footer span {
+    flex-basis: 100%;
   }
 }
