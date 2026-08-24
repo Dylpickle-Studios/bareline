@@ -3,8 +3,7 @@
 > A focused Git server and Git web interface, without project-management or CI clutter.
 
 Bareline is a lightweight, server-rendered home for repositories, files, commits, diffs, branches,
-tags, blame, search, cloning, and pushing. The temporary product name and links are centralized so a
-future name can be adopted without touching routes or templates.
+tags, blame, search, cloning, and pushing.
 
 This project intentionally does **not** provide issues, pull requests, CI/CD, project boards,
 registries, deployments, or DevOps dashboards. Plugins may add independent capabilities, but those
@@ -23,6 +22,16 @@ Do not treat the current pre-1.0 tree as production-ready until the release chec
 The live acceptance checklist is maintained in
 [docs/production-readiness.md](docs/production-readiness.md); unchecked required items are active
 work, not deferred aspirations.
+
+## Design preview and container image
+
+The `Deploy design preview` workflow publishes the static interface preview from `demo/` to GitHub
+Pages when changes land on `main`. Enable **Settings → Pages → Source: GitHub Actions** once, then
+visit `https://OWNER.github.io/REPOSITORY/`.
+
+The `Publish container image` workflow publishes `ghcr.io/OWNER/REPOSITORY` from `main` and `v*`
+tags. It attaches build provenance and an SBOM. Pull a specific tagged release rather than relying
+on `latest` for production deployments.
 
 ## Development
 
