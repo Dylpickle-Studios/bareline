@@ -130,14 +130,32 @@ main {
   margin: 0;
   color: var(--muted);
 }
-.primary,
-main > section button {
+.repo-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.primary {
   padding: 8px 12px;
   border: 1px solid var(--accent);
   border-radius: 6px;
   background: var(--accent);
   color: #fff;
   font-weight: 650;
+}
+.repo-actions button {
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 650;
+}
+.repo-actions button.primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
 }
 .repo > div:last-child button:first-child {
   padding: 8px 12px;
@@ -161,6 +179,110 @@ main > section button {
   border-color: var(--accent);
   color: var(--ink);
   font-weight: 750;
+}
+.view-heading {
+  margin-block: 24px 16px;
+}
+.view-heading h2,
+.view-heading p {
+  margin-block: 3px;
+}
+.eyebrow {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.ref-create {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 14px;
+  margin-bottom: 24px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+}
+.ref-create label {
+  margin: 0;
+}
+.ref-create button {
+  margin-bottom: 0;
+  white-space: nowrap;
+}
+.ref-list,
+.activity-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+}
+.ref-list li,
+.activity-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 15px 16px;
+  border-top: 1px solid var(--line);
+}
+.ref-list li:first-child,
+.activity-list li:first-child {
+  border-top: 0;
+}
+.ref-list p,
+.activity-list p {
+  margin: 3px 0 0;
+  color: var(--muted);
+}
+.ref-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ref-actions button,
+.settings-card button {
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--ink);
+}
+.event-mark {
+  color: var(--accent);
+}
+.activity-list li > div {
+  flex: 1;
+}
+.activity-list time {
+  color: var(--muted);
+  font-size: 13px;
+}
+.status {
+  color: var(--accent);
+  font-weight: 700;
+}
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.settings-card {
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+}
+.settings-card h3 {
+  margin-top: 0;
+}
+.inline-check {
+  width: auto;
+  margin-right: 7px;
 }
 .bar,
 .latest,
@@ -369,6 +491,15 @@ textarea {
   .repo > div:last-child {
     display: flex;
     gap: 8px;
+  }
+  .ref-create,
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
+  .ref-list li,
+  .activity-list li {
+    align-items: flex-start;
+    flex-wrap: wrap;
   }
   .repo > div:last-child button {
     flex: 1;

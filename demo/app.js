@@ -1,4 +1,4 @@
-const storageKey = 'bareline-demo-v1';
+const storageKey = 'bareline-demo-v2';
 const seed = {
   view: 'code',
   branch: 'main',
@@ -48,7 +48,19 @@ const seed = {
     },
   ],
 };
-let state = JSON.parse(localStorage.getItem(storageKey) || 'null') || structuredClone(seed);
+const storedState = JSON.parse(localStorage.getItem(storageKey) || 'null');
+let state = storedState
+  ? {
+      ...structuredClone(seed),
+      ...storedState,
+      activity: Array.isArray(storedState.activity)
+        ? storedState.activity
+        : structuredClone(seed.activity),
+      policies: Array.isArray(storedState.policies)
+        ? storedState.policies
+        : structuredClone(seed.policies),
+    }
+  : structuredClone(seed);
 const app = document.querySelector('#view');
 const modal = document.querySelector('#modal');
 const title = document.querySelector('#modal-title');
@@ -140,13 +152,33 @@ function showDiff(commit) {
 }
 function showRefs(type) {
   const refs = state[type];
-  app.innerHTML = `<div class="bar"><strong>${type === 'branches' ? 'Branches' : 'Tags'}</strong><button class="primary" id="new-ref">New ${type === 'branches' ? 'branch' : 'tag'}</button></div><ul class="list">${refs.map((ref, index) => `<li class="row"><span><strong>${escape(ref)}</strong><br><small>${index === 0 ? 'default reference · ' : ''}${latest().id} · ${latest().time}</small></span><button data-ref="${escape(ref)}">Browse</button></li>`).join('')}</ul>`;
-  document.querySelector('#new-ref').onclick = () => referenceForm(type);
+  const label = type === 'branches' ? 'Branches' : 'Tags';
+  app.innerHTML = `<section class="view-heading"><p class="eyebrow">${label}</p><h2>alice/paper-trail</h2></section><form class="ref-create" id="ref-create"><label>Name<input id="inline-ref" required placeholder="${type === 'branches' ? 'feature/notes' : 'v0.2.0'}"></label><label>Start at<input value="main" readonly></label><button class="primary">Create ${type === 'branches' ? 'branch' : 'tag'}</button></form><ul class="ref-list">${refs.map((ref, index) => `<li><div><strong>${escape(ref)}</strong><p>${escape(latest().subject)} · ${latest().time}${index === 0 ? ' · default branch' : ''}</p>${type === 'tags' ? '<p><span class="status">Valid signature</span> · trusted as Alice Nguyen</p>' : index === 0 ? '<p><span class="status">Protected</span> · force push and deletion blocked</p>' : ''}</div><span class="ref-actions"><button data-ref="${escape(ref)}">Browse</button>${index === 0 && type === 'branches' ? '' : `<button data-delete-ref="${escape(ref)}">Delete</button>`}</span></li>`).join('')}</ul>`;
+  document.querySelector('#ref-create').onsubmit = (event) => {
+    event.preventDefault();
+    const value = document.querySelector('#inline-ref').value.trim();
+    if (!value || refs.includes(value)) return;
+    refs.push(value);
+    state.activity.unshift({
+      action: type === 'branches' ? 'branch.created' : 'tag.created',
+      detail: value,
+      time: 'just now',
+    });
+    save();
+    render();
+  };
   document.querySelectorAll('[data-ref]').forEach((button) => {
     button.onclick = () => {
       state.branch = button.dataset.ref;
       state.view = 'code';
       state.file = null;
+      save();
+      render();
+    };
+  });
+  document.querySelectorAll('[data-delete-ref]').forEach((button) => {
+    button.onclick = () => {
+      state[type] = state[type].filter((ref) => ref !== button.dataset.deleteRef);
       save();
       render();
     };
@@ -157,7 +189,10 @@ function showCompare() {
   app.innerHTML = `<div class="bar"><label>Base <select><option>main</option></select></label><label>Compare <select><option>${escape(state.branch)}</option></select></label></div><section class="card"><header><span>${escape(commit.file)} · ${commit.id}</span><span class="stats"><b class="add">+${commit.after.split('\n').length - 1}</b> <b class="del">−${commit.before.split('\n').length - 1}</b></span></header><ul class="diff">${diffs(commit.before, commit.after)}</ul></section>`;
 }
 function showActivity() {
-  app.innerHTML = `<div class="bar"><strong>Repository activity</strong><small>Git-focused events</small></div><ul class="list">${state.activity.map((event) => `<li class="row"><span><strong>${escape(event.action)}</strong><br><small>Alice Nguyen · ${escape(event.detail)}</small></span><small>${escape(event.time)}</small></li>`).join('')}</ul>`;
+  app.innerHTML = `<section class="view-heading"><p class="eyebrow">alice/paper-trail</p><h2>Repository activity</h2><p>Git and repository changes, without notification clutter.</p></section><ol class="activity-list">${state.activity.map((event) => `<li><span class="event-mark" aria-hidden="true">●</span><div><strong>${escape(event.action)}</strong><p>Alice Nguyen · <code>${escape(event.detail)}</code></p></div><time>${escape(event.time)}</time></li>`).join('')}</ol>`;
+}
+function showSettings() {
+  app.innerHTML = `<section class="view-heading"><p class="eyebrow">alice/paper-trail</p><h2>Repository settings</h2></section><div class="settings-grid"><section class="settings-card"><h3>Branch policies</h3><p><strong>main</strong> · protected from force pushes and deletion</p><label>Required commit prefix<input value="PT-"></label><button>Save policy</button></section><section class="settings-card"><h3>Deploy keys</h3><p><strong>docs-deploy</strong><br><code>SHA256:q3DemoFingerprint</code> · read-only</p><button>Add deploy key</button></section><section class="settings-card"><h3>Repository mirror</h3><label>Direction<select><option>Pull into Bareline</option></select></label><label>Remote URL<input value="https://git.example.test/alice/paper-trail.git"></label><p class="status">Healthy · checked 4 minutes ago</p><button>Run now</button></section><section class="settings-card"><h3>Template repository</h3><label><input class="inline-check" type="checkbox" checked> Allow use as a template</label><button>Save</button></section></div>`;
 }
 function render() {
   document
@@ -168,6 +203,7 @@ function render() {
   if (state.view === 'branches' || state.view === 'tags') showRefs(state.view);
   if (state.view === 'compare') showCompare();
   if (state.view === 'activity') showActivity();
+  if (state.view === 'settings') showSettings();
   document.querySelector('#back')?.addEventListener('click', () => {
     state.file = null;
     render();
@@ -201,6 +237,11 @@ function editor(file = '') {
       file: path,
       before,
       after: contents,
+      time: 'just now',
+    });
+    state.activity.unshift({
+      action: 'commit.createdViaWeb',
+      detail: state.branch,
       time: 'just now',
     });
     state.file = path;
@@ -328,11 +369,11 @@ document.querySelector('#pin').onclick = () => {
   document.querySelector('#pin').textContent = state.pinned ? 'Unpin' : 'Pin';
 };
 document.querySelector('#pin').textContent = state.pinned ? 'Unpin' : 'Pin';
-document.querySelector('#settings').onclick = () =>
-  openModal(
-    'Repository settings',
-    '<h3>Protected branches</h3><p><strong>main</strong> · force pushes blocked · deletion blocked · message prefix <code>PT-</code></p><h3>Deploy keys</h3><p>docs-deploy · read-only</p><h3>Mirror</h3><p>Pull mirror · every 60 minutes · healthy</p><h3>Template repository</h3><label><input type="checkbox" checked> Available as a template</label>',
-  );
+document.querySelector('#settings').onclick = () => {
+  state.view = 'settings';
+  state.file = null;
+  render();
+};
 document.querySelector('#theme').onclick = () => document.documentElement.classList.toggle('dark');
 document.querySelectorAll('[data-global]').forEach((button) => {
   button.onclick = () => globalAction(button.dataset.global);
@@ -341,6 +382,7 @@ document.querySelector('#reset').onclick = () => {
   state = structuredClone(seed);
   save();
   render();
+  document.querySelector('#pin').textContent = 'Unpin';
 };
 document.addEventListener('keydown', (event) => {
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
