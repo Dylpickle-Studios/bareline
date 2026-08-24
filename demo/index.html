@@ -61,33 +61,9 @@
         text-decoration: none;
         letter-spacing: -0.03em;
       }
-      .mark {
+      .brand img {
         width: 30px;
         height: 30px;
-        border-radius: 6px;
-        background: var(--accent);
-        position: relative;
-      }
-      .mark::before {
-        content: '';
-        position: absolute;
-        left: 9px;
-        top: 6px;
-        width: 10px;
-        height: 17px;
-        border: 2px solid #f7f7f3;
-        border-left-width: 3px;
-        border-radius: 0 8px 8px 0;
-      }
-      .mark::after {
-        content: '•\A•\A•';
-        white-space: pre;
-        position: absolute;
-        color: #f7f7f3;
-        left: 4px;
-        top: 2px;
-        line-height: 8px;
-        font-size: 15px;
       }
       .masthead nav {
         display: flex;
@@ -179,7 +155,8 @@
         border-bottom: 1px solid var(--line);
         overflow: auto;
       }
-      .preview nav a {
+      .preview nav a,
+      .preview nav span {
         padding: 10px 0 9px;
         white-space: nowrap;
         text-decoration: none;
@@ -352,7 +329,7 @@
   <body>
     <main class="shell">
       <header class="masthead">
-        <a class="brand" href="#top"><span class="mark" aria-hidden="true"></span>Bareline</a>
+        <a class="brand" href="#top"><img src="logo.svg" alt="" />Bareline</a>
         <nav>
           <a href="#preview">Repository preview</a><a href="#features">Features</a
           ><button id="palette" class="key" aria-haspopup="dialog">⌘ K</button>
@@ -367,17 +344,18 @@
             tags, search, and the everyday work of Git.
           </p>
           <div class="actions">
-            <a class="button" href="https://github.com">View on GitHub</a
+            <a class="button" href="https://github.com/Dylpickle-Studios/bareline">View on GitHub</a
             ><a class="button secondary" href="app.html">Try the interactive demo</a>
           </div>
         </div>
         <div class="preview" id="preview">
           <div class="preview-top">
-            <span><strong>alice / paper-trail</strong> · Public</span><span>Clone ⌄</span>
+            <span><strong>alice / paper-trail</strong> · Public</span
+            ><span aria-hidden="true">Clone ⌄</span>
           </div>
           <nav>
-            <a href="#preview">Code</a><a href="#preview">Commits</a><a href="#preview">Branches</a
-            ><a href="#preview">Tags</a><a href="#preview">Compare</a>
+            <span>Code</span><span>Commits</span><span>Branches</span><span>Tags</span
+            ><span>Compare</span>
           </nav>
           <div class="commit">
             <span>● <strong>Refine the reading experience</strong></span

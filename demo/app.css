@@ -59,7 +59,7 @@ header nav {
   font-weight: 800;
   letter-spacing: -0.04em;
 }
-.brand b {
+.brand img {
   display: inline-grid;
   place-items: center;
   width: 28px;
