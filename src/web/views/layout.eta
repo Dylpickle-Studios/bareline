@@ -32,6 +32,7 @@
     </nav>
   </header>
   <main id="content"><%~ it.body %></main>
+  <footer class="site-footer"><span><%= it.product.name %> · focused Git hosting</span><nav aria-label="Footer navigation"><a href="/docs">Documentation</a><a href="/docs/security">Security</a><a href="<%= it.product.websiteUrl %>">Website</a></nav></footer>
   <dialog id="command-palette" aria-labelledby="palette-title">
     <form method="dialog" class="palette">
       <label id="palette-title" for="palette-search">Go anywhere</label>

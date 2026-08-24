@@ -91,6 +91,15 @@ input {
   outline: 3px solid color-mix(in srgb, var(--accent) 65%, transparent);
   outline-offset: 2px;
 }
+html,
+body {
+  min-height: 100%;
+}
+body {
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+}
 .skip-link {
   position: fixed;
   inset: 0.5rem auto auto 0.5rem;
@@ -103,6 +112,9 @@ input {
   transform: none;
 }
 .site-header {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 10;
   height: 58px;
   display: flex;
   align-items: center;
@@ -130,9 +142,29 @@ input {
   letter-spacing: -0.02em;
 }
 main {
+  flex: 1 0 auto;
   width: min(1120px, calc(100% - 2rem));
   margin-inline: auto;
   padding-block: clamp(2rem, 6vw, 5rem);
+}
+.site-footer {
+  display: flex;
+  width: min(1120px, calc(100% - 2rem));
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-inline: auto;
+  padding-block: 1.25rem;
+  border-block-start: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.site-footer nav {
+  display: flex;
+  gap: 1rem;
+}
+.site-footer a {
+  color: inherit;
 }
 .hero {
   max-width: 760px;
@@ -1246,6 +1278,10 @@ dialog::backdrop {
 }
 
 @media (max-width: 700px) {
+  .site-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
   .image-diff-sides {
     grid-template-columns: 1fr;
   }

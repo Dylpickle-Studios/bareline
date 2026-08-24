@@ -26,6 +26,9 @@ html.dark {
   box-sizing: border-box;
 }
 body {
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
   margin: 0;
   background: var(--paper);
   color: var(--ink);
@@ -44,6 +47,9 @@ button {
   cursor: pointer;
 }
 header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
   height: 58px;
   padding: 0 max(20px, calc((100vw - 1120px) / 2));
   display: flex;
@@ -91,6 +97,7 @@ kbd {
   transform: none;
 }
 main {
+  flex: 1 0 auto;
   max-width: 1120px;
   margin: auto;
   padding: 22px 24px 50px;
@@ -103,7 +110,22 @@ main {
   background: none;
   color: var(--ink);
 }
+.breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 22px 0 10px;
+  color: var(--muted);
+}
+.breadcrumbs button {
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid currentColor;
+  background: none;
+  color: var(--ink);
+}
 footer {
+  flex: 0 0 auto;
   display: flex;
   max-width: 1120px;
   align-items: center;

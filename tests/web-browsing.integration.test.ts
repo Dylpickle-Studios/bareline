@@ -20,12 +20,20 @@ describe('server-rendered repository browsing', () => {
     });
     const git = new GitRunner('git', 10_000, 16 * 1024 * 1024);
     const repositories = new RepositoryService(database, git, config, audit);
-    await repositories.createForUser({
+    const repository = await repositories.createForUser({
       actorUserId: user.id,
       ownerUserId: user.id,
       slug: 'example',
       visibility: 'public',
       initializeReadme: true,
+    });
+    await new RepositoryMutationService(database, git, repositories, config, audit).commitFile({
+      repository,
+      actorUserId: user.id,
+      branch: 'main',
+      filePath: 'docs/guides/install.md',
+      content: Buffer.from('# Install\n'),
+      message: 'Add installation guide',
     });
     database.close();
 
@@ -33,9 +41,27 @@ describe('server-rendered repository browsing', () => {
     try {
       const repositoryPage = await app.inject({ method: 'GET', url: '/alice/example' });
       expect(repositoryPage.statusCode).toBe(200);
+      expect(repositoryPage.body).toContain('<header class="site-header">');
+      expect(repositoryPage.body).toContain('<footer class="site-footer">');
       expect(repositoryPage.body).toContain('<article class="readme markdown-body">');
       expect(repositoryPage.body).toContain('git@localhost:alice/example.git');
       expect(repositoryPage.body).toContain('git clone http://localhost:3000/alice/example.git');
+      expect(repositoryPage.body).toContain('/alice/example/tree/docs?ref=main');
+
+      const directory = await app.inject({
+        method: 'GET',
+        url: '/alice/example/tree/docs?ref=main',
+      });
+      expect(directory.statusCode).toBe(200);
+      expect(directory.body).toContain('/alice/example/tree/docs/guides?ref=main');
+      expect(directory.body).not.toContain('/alice/example/blob/docs/guides/install.md?ref=main');
+
+      const nestedDirectory = await app.inject({
+        method: 'GET',
+        url: '/alice/example/tree/docs/guides?ref=main',
+      });
+      expect(nestedDirectory.statusCode).toBe(200);
+      expect(nestedDirectory.body).toContain('/alice/example/blob/docs/guides/install.md?ref=main');
 
       const page = await app.inject({
         method: 'GET',

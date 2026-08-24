@@ -3,6 +3,7 @@ const seed = {
   view: 'code',
   branch: 'main',
   file: null,
+  directory: '',
   branches: ['main', 'feature/reading-mode'],
   tags: ['v0.1.0'],
   pinned: true,
@@ -99,22 +100,27 @@ function diffs(before, after) {
       .join('')}` || '<li>No textual changes</li>'
   );
 }
-function fileRow(file) {
-  return `<li class="row"><span>·</span><button class="name" data-file="${escape(file)}">${escape(file)}</button><small>${state.files[file].length} B</small></li>`;
+function fileRow(file, label = file) {
+  return `<li class="row"><span>·</span><button class="name" data-file="${escape(file)}">${escape(label)}</button><small>${state.files[file].length} B</small></li>`;
 }
 function showCode() {
   const top = latest();
-  const roots = [
+  const prefix = state.directory ? `${state.directory}/` : '';
+  const visiblePaths = Object.keys(state.files).filter((path) => path.startsWith(prefix));
+  const folders = [
     ...new Set(
-      Object.keys(state.files)
+      visiblePaths
+        .map((path) => path.slice(prefix.length))
         .filter((path) => path.includes('/'))
         .map((path) => path.split('/')[0]),
     ),
   ];
-  const rootFiles = Object.keys(state.files)
-    .filter((path) => !path.includes('/'))
-    .sort();
-  app.innerHTML = `<div class="bar"><label><select id="branch" aria-label="Branch">${state.branches.map((branch) => `<option ${branch === state.branch ? 'selected' : ''}>${escape(branch)}</option>`).join('')}</select></label><span>Switch</span><small>${Object.keys(state.files).length} items</small><button id="new-file">New file</button><button id="upload-file">Upload</button></div><div class="latest"><span><b class="sha">${top.id}</b> ${escape(top.subject)}</span><small>Alice Nguyen · ${top.time}</small></div><ul class="list">${roots.map((folder) => `<li class="row"><span class="folder">▰</span><button class="name" data-folder="${folder}">${folder}</button><small>folder</small></li>`).join('')}${rootFiles.map(fileRow).join('')}</ul>${state.file ? showFile(state.file) : `<section class="card"><header>README <button id="edit-readme">Edit</button></header><article class="markdown"><h2>Paper Trail</h2><p>A small, durable record of decisions.</p><h3>Principles</h3><p>Keep the work visible. Prefer durable tools.</p></article></section>`}`;
+  const files = visiblePaths.filter((path) => !path.slice(prefix.length).includes('/')).sort();
+  const crumbs = state.directory
+    .split('/')
+    .filter(Boolean)
+    .map((part, index, parts) => ({ name: part, path: parts.slice(0, index + 1).join('/') }));
+  app.innerHTML = `${state.directory ? `<nav class="breadcrumbs" aria-label="Breadcrumb"><button data-directory="">root</button>${crumbs.map((crumb) => `<span>/</span><button data-directory="${escape(crumb.path)}">${escape(crumb.name)}</button>`).join('')}</nav>` : ''}<div class="bar"><label><select id="branch" aria-label="Branch">${state.branches.map((branch) => `<option ${branch === state.branch ? 'selected' : ''}>${escape(branch)}</option>`).join('')}</select></label><span>Switch</span><small>${folders.length + files.length} items</small><button id="new-file">New file</button><button id="upload-file">Upload</button></div><div class="latest"><span><b class="sha">${top.id}</b> ${escape(top.subject)}</span><small>Alice Nguyen · ${top.time}</small></div><ul class="list">${folders.map((folder) => `<li class="row"><span class="folder">▰</span><button class="name" data-folder="${escape(prefix + folder)}">${escape(folder)}</button><small>folder</small></li>`).join('')}${files.map((file) => fileRow(file, file.slice(prefix.length))).join('')}</ul>${state.file ? showFile(state.file) : !state.directory && state.files['README.md'] ? `<section class="card"><header>README <button id="edit-readme">Edit</button></header><article class="markdown"><h2>Paper Trail</h2><p>A small, durable record of decisions.</p><h3>Principles</h3><p>Keep the work visible. Prefer durable tools.</p></article></section>` : ''}`;
   document.querySelector('#branch').onchange = (event) => {
     state.branch = event.target.value;
     save();
@@ -127,9 +133,15 @@ function showCode() {
   });
   document.querySelectorAll('[data-folder]').forEach((button) => {
     button.onclick = () => {
-      state.file = Object.keys(state.files).find((file) =>
-        file.startsWith(`${button.dataset.folder}/`),
-      );
+      state.directory = button.dataset.folder;
+      state.file = null;
+      render();
+    };
+  });
+  document.querySelectorAll('[data-directory]').forEach((button) => {
+    button.onclick = () => {
+      state.directory = button.dataset.directory;
+      state.file = null;
       render();
     };
   });
@@ -370,6 +382,26 @@ const docs = {
     'Plugins',
     '<h2>Capability-based extensions</h2><p>Sandboxed WASM plugins receive only approved capabilities. Trusted Node plugins are server software and require an explicit trust decision.</p><h2>Settings and storage</h2><p>Core renders schema-defined settings and gives plugins isolated, namespaced storage.</p>',
   ],
+  operations: [
+    'Operations and backups',
+    '<h2>Backup</h2><p>The administrative CLI creates a verified bundle containing SQLite, configuration, plugins, repositories, and LFS data.</p><pre>bareline backup --output /safe/backup</pre><h2>Restore</h2><p>Restore verifies the checksum manifest and refuses to replace existing data without explicit confirmation.</p>',
+  ],
+  themes: [
+    'Themes and accessibility',
+    '<h2>Appearance</h2><p>Choose light, dark, or system mode and configure the accent, interface font, and code font from account settings.</p><h2>Accessibility</h2><p>Bareline uses semantic HTML, visible focus states, keyboard navigation, reduced-motion support, and responsive layouts.</p>',
+  ],
+  ssh: [
+    'SSH setup',
+    '<h2>Forced commands</h2><p>Bareline integrates with OpenSSH. Registered keys can invoke only approved Git operations and never receive an interactive shell.</p><pre>bareline ssh setup --config config.yml</pre>',
+  ],
+  security: [
+    'Security and threat model',
+    '<h2>Repositories are hostile input</h2><p>Git runs without a shell, paths and refs are validated, expensive output is bounded, and repository hooks, filters, and textconv are not executed while browsing.</p><h2>Plugin trust</h2><p>Sandboxed extensions use a capability boundary. Trusted Node plugins are equivalent to installing server software.</p>',
+  ],
+  readiness: [
+    'Production readiness',
+    '<h2>Release checks</h2><p>Production releases require migrations, authentication and authorization, transport integration, resource limits, backup verification, packaging, and security-focused tests to pass together.</p>',
+  ],
 };
 function showDocs(selected = 'start') {
   const [heading, content] = docs[selected] || docs.start;
@@ -379,9 +411,7 @@ function showDocs(selected = 'start') {
         ([id, entry]) =>
           `<button class="${id === selected ? 'selected' : ''}" data-doc="${id}">${entry[0]}</button>`,
       )
-      .join(
-        '',
-      )}<button data-doc="deploy">Operations and backups</button><button data-doc="plugins">Themes and accessibility</button><button data-doc="admin">Security and threat model</button></aside><article class="doc-article"><h1>${heading}</h1>${content}</article></div>`,
+      .join('')}</aside><article class="doc-article"><h1>${heading}</h1>${content}</article></div>`,
   );
   document.querySelectorAll('[data-doc]').forEach((button) => {
     button.onclick = () => showDocs(button.dataset.doc);
