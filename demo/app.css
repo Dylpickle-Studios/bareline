@@ -44,7 +44,7 @@ button {
   cursor: pointer;
 }
 header {
-  height: 64px;
+  height: 58px;
   padding: 0 max(20px, calc((100vw - 1120px) / 2));
   display: flex;
   align-items: center;
@@ -67,13 +67,6 @@ header nav {
   vertical-align: middle;
   width: 28px;
   height: 28px;
-}
-.brand small {
-  font:
-    12px ui-monospace,
-    monospace;
-  color: var(--muted);
-  letter-spacing: 0;
 }
 header button,
 .tabs button,
@@ -101,6 +94,34 @@ main {
   max-width: 1120px;
   margin: auto;
   padding: 22px 24px 50px;
+}
+.activity-link {
+  margin: 24px 0 14px;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid currentColor;
+  background: none;
+  color: var(--ink);
+}
+footer {
+  display: flex;
+  max-width: 1120px;
+  align-items: center;
+  gap: 12px;
+  margin: 50px auto 0;
+  padding: 18px 24px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+}
+footer span {
+  margin-right: auto;
+}
+footer button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
 }
 .hero {
   max-width: 760px;
@@ -322,6 +343,7 @@ main {
   font-size: 13px;
 }
 .repo {
+  align-items: center;
   display: flex;
   justify-content: space-between;
   gap: 20px;
@@ -346,12 +368,6 @@ main {
   margin: 0;
   color: var(--muted);
 }
-.repo-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
 .primary {
   padding: 8px 12px;
   border: 1px solid var(--accent);
@@ -360,7 +376,7 @@ main {
   color: #fff;
   font-weight: 650;
 }
-.repo-actions button {
+.repo .button {
   padding: 8px 12px;
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -368,16 +384,10 @@ main {
   color: var(--ink);
   font-weight: 650;
 }
-.repo-actions button.primary {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: #fff;
-}
-.repo > div:last-child button:first-child {
-  padding: 8px 12px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--surface);
+.quiet-action {
+  margin-left: auto;
+  border: 0;
+  background: none;
   color: var(--ink);
 }
 .tabs {
@@ -515,6 +525,20 @@ main {
   margin-top: 16px;
   border-radius: 7px 7px 0 0;
   background: #f4f8f5;
+}
+.bar label {
+  width: 145px;
+  margin: 0;
+}
+.bar small {
+  margin-left: auto;
+}
+.bar button {
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--ink);
 }
 .latest {
   border-top: 0;
@@ -704,10 +728,6 @@ textarea {
   .repo {
     flex-direction: column;
   }
-  .repo > div:last-child {
-    display: flex;
-    gap: 8px;
-  }
   .ref-create,
   .settings-grid {
     grid-template-columns: 1fr;
@@ -717,14 +737,10 @@ textarea {
     align-items: flex-start;
     flex-wrap: wrap;
   }
-  .repo > div:last-child button {
-    flex: 1;
-  }
   header {
     padding-inline: 16px;
   }
-  .brand small,
-  header nav button[data-global]:not([data-global='home']) {
+  header nav button[data-global]:not([data-global='explore']) {
     display: none;
   }
   .latest,

@@ -10,7 +10,7 @@
   <body>
     <a class="skip" href="#app">Skip to content</a>
     <header>
-      <a class="brand" href="index.html"
+      <a class="brand" id="brand-home" href="#home"
         ><svg class="logo" viewBox="0 0 40 40" aria-hidden="true">
           <rect width="40" height="40" rx="7" fill="#236b5b" />
           <path
@@ -26,42 +26,33 @@
           <circle cx="13" cy="32" r="2.7" fill="#f6f4ec" />
           <circle cx="27" cy="13.5" r="2.7" fill="#f6f4ec" />
         </svg>
-        Bareline <small>interactive demo</small></a
+        Bareline</a
       >
       <nav>
-        <button data-global="home">Home</button><button data-global="explore">Explore</button
-        ><button data-global="docs">Docs</button><button data-global="groups">Groups</button
-        ><button data-global="admin">Admin</button><button id="search">Search <kbd>⌘ K</kbd></button
-        ><button data-global="account">Alice</button><button data-global="logout">Log out</button
-        ><button id="theme" aria-label="Toggle theme">◐</button>
+        <button data-global="explore">Explore</button><button data-global="docs">Docs</button
+        ><button id="search">Search <kbd>⌘K</kbd></button
+        ><button data-global="groups">Groups</button><button data-global="admin">Admin</button
+        ><button data-global="account">Alice Nguyen</button>
       </nav>
     </header>
     <main id="app">
-      <p class="notice">
-        <strong>Demo account: Alice Nguyen.</strong> This is local sample data; commits and settings
-        are saved only in your browser. <button id="reset">Reset</button>
-      </p>
       <section id="home-view" hidden></section>
       <section id="repository-view">
         <section class="repo">
-          <div class="repo-actions">
+          <div>
             <span>PUBLIC REPOSITORY</span>
             <h1>alice <i>/</i> paper-trail</h1>
             <p>A small, durable record of decisions.</p>
           </div>
-          <div>
-            <button id="pin">Pin</button>
-            <button id="settings">Settings</button>
-            <button id="clone">Clone</button>
-            <button class="primary" id="new-file">New file</button>
-          </div>
+          <button class="quiet-action" id="pin">Pin</button>
+          <button class="button" id="clone">Clone</button>
         </section>
         <nav class="tabs">
           <button data-view="code">Code</button><button data-view="commits">Commits</button
           ><button data-view="branches">Branches</button><button data-view="tags">Tags</button
-          ><button data-view="compare">Compare</button
-          ><button data-view="activity">Activity</button>
+          ><button data-view="compare">Compare</button><button id="settings">Settings</button>
         </nav>
+        <button class="activity-link" data-view="activity">View repository activity</button>
         <section id="view" aria-live="polite"></section>
       </section>
     </main>
@@ -71,6 +62,11 @@
         <div id="modal-content"></div>
       </form>
     </dialog>
+    <footer>
+      <span>Static Bareline demonstration · changes stay in this browser</span
+      ><button id="reset">Reset demo data</button><button data-global="logout">Log out</button
+      ><button id="theme">Theme</button>
+    </footer>
     <script src="app.js"></script>
   </body>
 </html>

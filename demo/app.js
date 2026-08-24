@@ -114,7 +114,7 @@ function showCode() {
   const rootFiles = Object.keys(state.files)
     .filter((path) => !path.includes('/'))
     .sort();
-  app.innerHTML = `<div class="bar"><label>Branch <select id="branch">${state.branches.map((branch) => `<option ${branch === state.branch ? 'selected' : ''}>${escape(branch)}</option>`).join('')}</select></label><small>${Object.keys(state.files).length} files</small></div><div class="latest"><span><b class="sha">${top.id}</b> ${escape(top.subject)}</span><small>Alice Nguyen · ${top.time}</small></div><ul class="list">${roots.map((folder) => `<li class="row"><span class="folder">▰</span><button class="name" data-folder="${folder}">${folder}</button><small>folder</small></li>`).join('')}${rootFiles.map(fileRow).join('')}</ul>${state.file ? showFile(state.file) : `<section class="card"><header>README.md <button id="edit-readme">Edit</button></header><article class="markdown"><h2>Paper Trail</h2><p>A small, durable record of decisions.</p><h3>Principles</h3><p>Keep the work visible. Prefer durable tools.</p></article></section>`}`;
+  app.innerHTML = `<div class="bar"><label><select id="branch" aria-label="Branch">${state.branches.map((branch) => `<option ${branch === state.branch ? 'selected' : ''}>${escape(branch)}</option>`).join('')}</select></label><span>Switch</span><small>${Object.keys(state.files).length} items</small><button id="new-file">New file</button><button id="upload-file">Upload</button></div><div class="latest"><span><b class="sha">${top.id}</b> ${escape(top.subject)}</span><small>Alice Nguyen · ${top.time}</small></div><ul class="list">${roots.map((folder) => `<li class="row"><span class="folder">▰</span><button class="name" data-folder="${folder}">${folder}</button><small>folder</small></li>`).join('')}${rootFiles.map(fileRow).join('')}</ul>${state.file ? showFile(state.file) : `<section class="card"><header>README <button id="edit-readme">Edit</button></header><article class="markdown"><h2>Paper Trail</h2><p>A small, durable record of decisions.</p><h3>Principles</h3><p>Keep the work visible. Prefer durable tools.</p></article></section>`}`;
   document.querySelector('#branch').onchange = (event) => {
     state.branch = event.target.value;
     save();
@@ -134,6 +134,12 @@ function showCode() {
     };
   });
   document.querySelector('#edit-readme')?.addEventListener('click', () => editor('README.md'));
+  document.querySelector('#new-file').onclick = () => editor();
+  document.querySelector('#upload-file').onclick = () =>
+    openModal(
+      'Upload files',
+      '<label>Choose files<input type="file" multiple></label><label>Commit message<input value="Upload files"></label><div class="modal-actions"><button value="cancel">Cancel</button><button class="primary" value="cancel">Commit upload</button></div>',
+    );
 }
 function showFile(file) {
   return `<section class="card"><header><span>${escape(file)}</span><span><button id="back">Back</button> <button id="edit">Edit</button></span></header><pre>${lines(state.files[file])}</pre></section>`;
@@ -459,7 +465,7 @@ function showAccount(selected = 'profile') {
           ? '<div class="panel"><h3>alice-laptop</h3><p><code>SHA256:q3DemoFingerprint</code></p><button data-demo-message="The demo does not accept real credentials.">Add SSH key</button></div>'
           : selected === 'tokens'
             ? '<div class="panel"><p>Tokens are shown only once and stored hashed.</p><button data-demo-message="The static demo never generates real credentials.">Create token</button></div>'
-            : '<form class="panel compact"><label>Username<input value="alice" readonly></label><label>Display name<input value="Alice Nguyen"></label><label>Public email<input value="alice@example.test"></label><button class="primary" data-demo-message="Profile saved for this demo.">Save profile</button></form>';
+            : '<form class="panel compact"><label>Username<input value="alice" readonly></label><label>Display name<input value="Alice Nguyen"></label><label>Public email<input value="alice@example.test"></label><button class="primary" data-demo-message="Profile saved for this demo.">Save profile</button><hr><button type="button" data-global="logout">Log out</button></form>';
   showPage(
     `<div class="section-layout"><aside><p class="eyebrow">User settings</p>${Object.entries(titles)
       .map(
@@ -474,6 +480,7 @@ function showAccount(selected = 'profile') {
     button.onclick = () => showAccount(button.dataset.account);
   });
   bindDemoMessages();
+  homeView.querySelector('[data-global="logout"]')?.addEventListener('click', () => showHome(true));
 }
 function bindDemoMessages() {
   document.querySelectorAll('[data-demo-message]').forEach((button) => {
@@ -504,7 +511,6 @@ document.querySelectorAll('[data-view]').forEach((button) => {
     render();
   };
 });
-document.querySelector('#new-file').onclick = () => editor();
 document.querySelector('#search').onclick = palette;
 document.querySelector('#clone').onclick = () =>
   openModal(
@@ -526,6 +532,10 @@ document.querySelector('#theme').onclick = () => document.documentElement.classL
 document.querySelectorAll('[data-global]').forEach((button) => {
   button.onclick = () => globalAction(button.dataset.global);
 });
+document.querySelector('#brand-home').onclick = (event) => {
+  event.preventDefault();
+  showHome();
+};
 document.querySelector('#reset').onclick = () => {
   state = structuredClone(seed);
   save();
