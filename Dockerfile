@@ -23,7 +23,7 @@ RUN mkdir -p /var/lib/bareline && chown bareline:bareline /var/lib/bareline
 USER 10001:10001
 VOLUME ["/var/lib/bareline"]
 EXPOSE 3000
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+HEALTHCHECK --interval=5s --timeout=5s --start-period=5s --retries=6 \
   CMD node -e "fetch('http://127.0.0.1:3000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
 ENTRYPOINT ["node", "dist/cli/index.js"]
 CMD ["serve", "--config", "/etc/bareline/config.yml"]
