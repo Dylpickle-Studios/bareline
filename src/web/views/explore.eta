@@ -1,0 +1,5 @@
+<section class="repo-shell">
+  <header><p class="eyebrow">Explore</p><h1>Repositories you can access</h1><p class="muted">Private repositories appear only when your account has permission.</p></header>
+  <% if (!it.repositories.length) { %><div class="empty"><h2>No repositories to show</h2></div><% } %>
+  <ul class="repository-list"><% it.repositories.forEach(function(repository) { %><li><div><a class="commit-subject" href="/<%= repository.ownerSlug %>/<%= repository.slug %>"><%= repository.ownerSlug %>/<%= repository.slug %></a><p><%= repository.description %></p></div><span class="status"><%= repository.visibility %></span></li><% }) %></ul>
+</section>

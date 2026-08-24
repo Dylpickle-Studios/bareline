@@ -1,0 +1,4 @@
+<section class="repo-shell">
+  <header><p class="eyebrow">Blame at <%= it.ref %></p><h1><%= it.path %></h1></header>
+  <div class="blame-view" role="region" aria-label="Blame annotations" tabindex="0"><ol><% it.lines.forEach(function(line) { %><li id="L<%= line.lineNumber %>"><a class="blame-meta" href="/<%= it.repository.ownerSlug %>/<%= it.repository.slug %>/commit/<%= line.objectId %>" title="<%= line.authoredAt %>"><span class="sha"><%= line.objectId.slice(0, 8) %></span><span><%= line.author %></span></a><a class="line-number" href="#L<%= line.lineNumber %>"><%= line.lineNumber %></a><code><%= line.content %></code></li><% }) %></ol></div>
+</section>

@@ -1,0 +1,1 @@
+<section class="error-page"><p class="error-code"><%= it.statusCode %></p><h1><%= it.heading %></h1><p><%= it.message %></p><% if (it.requestId) { %><p class="muted">Request ID: <code><%= it.requestId %></code></p><% } %><a class="button" href="/">Return home</a></section>

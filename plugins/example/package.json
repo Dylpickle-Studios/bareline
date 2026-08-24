@@ -1,0 +1,10 @@
+{
+  "name": "@bareline/example-word-count",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "peerDependencies": {
+    "@bareline/plugin-sdk": "^1.0.0"
+  }
+}

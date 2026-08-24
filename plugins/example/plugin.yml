@@ -1,0 +1,67 @@
+id: example.word-count
+name: Repository Word Count
+version: 1.0.0
+apiVersion: 1
+runtime: trusted
+author: Bareline contributors
+entrypoint: index.mjs
+permissions:
+  - repositoryContents.read
+  - ui.repository
+  - ui.global
+  - storage.plugin
+  - settings.read
+  - events.subscribe
+contributes:
+  repositoryTabs:
+    - id: word-count
+      title: Word Count
+  commands:
+    - id: word-count.calculate
+      title: Calculate repository word count
+  searchProviders:
+    - id: word-count.help
+      title: Word Count help
+  fileRenderers:
+    - id: word-count.preview
+      title: Word-count preview
+      extensions: [md, txt]
+  markdownExtensions:
+    - id: word-count.badge
+      title: Word Count marker
+  adminPages:
+    - id: word-count.status
+      title: Word Count status
+  themes:
+    - id: ink
+      title: Ink
+      colorScheme: dark
+      colors:
+        background: '#101315'
+        surface: '#171b1e'
+        surfaceSubtle: '#20262a'
+        text: '#edf1f2'
+        muted: '#a2acb0'
+        border: '#344047'
+        accent: '#67c7a5'
+        accentStrong: '#8fddc1'
+  navigation:
+    - id: word-count.docs
+      title: Word Count docs
+      href: /docs/plugins
+  restEndpoints:
+    - id: word-count.last-result
+      title: Last word-count result
+      method: GET
+  events:
+    - event: repository.pushed
+      handler: repository-pushed
+settings:
+  extensions:
+    type: multi-select
+    title: Included file extensions
+    options: [md, txt, ts, js, css, html]
+  maximumBytes:
+    type: number
+    title: Maximum bytes to inspect
+    default: 1048576

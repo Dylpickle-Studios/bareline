@@ -1,0 +1,8 @@
+<section class="repo-shell">
+  <header><p class="eyebrow">Search</p><h1>Find code and history</h1></header>
+  <form method="get" class="search-form"><label class="sr-only" for="global-search">Search</label><input id="global-search" type="search" name="q" value="<%= it.query %>" maxlength="200" required autofocus><button class="button" type="submit">Search</button></form>
+  <% if (it.query && it.results.length === 0) { %><div class="empty"><h2>No results</h2><p>Try a filename, repository name, commit subject, or source term.</p></div><% } %>
+  <ol class="search-results"><% it.results.forEach(function(result) { %><li><p class="eyebrow"><%= result.type %> · <%= result.owner %>/<%= result.repository %></p><a href="<%= result.url %>"><strong><%= result.title %></strong><% if (result.path) { %><span class="muted"> · <%= result.path %></span><% } %></a><p><%~ result.excerpt %></p></li><% }) %></ol>
+  <% if (it.directoryResults.length) { %><h2>Users and groups</h2><ol class="search-results"><% it.directoryResults.forEach(function(result) { %><li><p class="eyebrow"><%= result.type %> · <%= result.subtitle %></p><a href="<%= result.url %>"><strong><%= result.title %></strong></a></li><% }) %></ol><% } %>
+  <% if (it.documentationResults.length) { %><h2>Documentation</h2><ol class="search-results"><% it.documentationResults.forEach(function(result) { %><li><p class="eyebrow"><%= result.subtitle %></p><a href="<%= result.url %>"><strong><%= result.title %></strong></a></li><% }) %></ol><% } %>
+</section>

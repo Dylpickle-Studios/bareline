@@ -1,0 +1,20 @@
+<section class="narrow">
+  <h1><%= it.mode === 'login' ? 'Welcome back' : 'Create your account' %></h1>
+  <% if (it.error) { %><div class="notice error" role="alert"><%= it.error %></div><% } %>
+  <form method="post" class="form-stack">
+    <input type="hidden" name="csrf" value="<%= it.csrf ?? '' %>">
+    <% if (it.mode === 'register' && it.inviteToken) { %><input type="hidden" name="invite" value="<%= it.inviteToken %>"><% } %>
+    <label>Username<input name="username" autocomplete="username" required maxlength="39"></label>
+    <% if (it.mode === 'register') { %>
+      <label>Display name<input name="displayName" autocomplete="name" required maxlength="100"></label>
+      <label>Email <span class="muted">optional</span><input name="email" type="email" autocomplete="email"></label>
+    <% } %>
+    <label>Password<input name="password" type="password" autocomplete="<%= it.mode === 'login' ? 'current-password' : 'new-password' %>" required minlength="12"></label>
+    <button class="button primary" type="submit"><%= it.mode === 'login' ? 'Sign in' : 'Create account' %></button>
+    <% if (it.mode === 'login') { %><a href="/recover">Use a recovery code</a><% } %>
+  </form>
+  <% if (it.mode === 'login') { %><div class="auth-divider"><span>or</span></div><button class="button" type="button" data-passkey-login>Sign in with a passkey</button><span data-passkey-status role="status"></span><% } %>
+  <% if (it.mode === 'login' && it.oidcProviders.length) { %><div class="external-auth"><% it.oidcProviders.forEach(function(provider) { %><a class="button" href="/auth/oidc/<%= provider.id %>">Continue with <%= provider.name %></a><% }) %></div><% } %>
+  <% if (it.mode === 'login' && it.ldapEnabled) { %><details><summary>Sign in with directory credentials</summary><form method="post" action="/auth/ldap" class="form-stack"><input type="hidden" name="csrf" value="<%= it.csrf %>"><label>Directory username<input name="username" autocomplete="username" required></label><label>Directory password<input name="password" type="password" autocomplete="current-password" required></label><button class="button" type="submit">Sign in with LDAP</button></form></details><% } %>
+  <% if (it.mode === 'login' && it.pluginAuthProviders.length) { %><div class="external-auth"><% it.pluginAuthProviders.forEach(function(provider) { %><details><summary>Sign in with <%= provider.title %></summary><form method="post" action="/auth/plugins/<%= provider.pluginId %>/<%= provider.id %>" class="form-stack"><input type="hidden" name="csrf" value="<%= it.csrf %>"><label><%= provider.usernameLabel %><input name="username" autocomplete="username" required maxlength="500"></label><label><%= provider.passwordLabel %><input name="password" type="password" autocomplete="current-password" required maxlength="4096"></label><button class="button" type="submit">Sign in with <%= provider.title %></button></form></details><% }) %></div><% } %>
+</section>

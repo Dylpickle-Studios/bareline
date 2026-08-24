@@ -1,0 +1,18 @@
+<section class="narrow">
+  <h1>Create a repository</h1>
+  <% if (it.error) { %><div class="notice error" role="alert"><%= it.error %></div><% } %>
+  <form method="post" class="form-stack">
+    <input type="hidden" name="csrf" value="<%= it.csrf %>">
+    <label>Owner<select name="owner"><option value="user:<%= it.user.username %>"><%= it.user.username %> (personal)</option><% it.groups.forEach(function(group) { %><option value="group:<%= group.slug %>"><%= group.displayName %></option><% }) %></select></label>
+    <label>Name<input name="slug" required maxlength="39" pattern="[a-z0-9][a-z0-9-]*"></label>
+    <label>Description<input name="description" maxlength="240"></label>
+    <fieldset><legend>Visibility</legend>
+      <label class="inline"><input type="radio" name="visibility" value="private" checked> Private</label>
+      <label class="inline"><input type="radio" name="visibility" value="public"> Public</label>
+    </fieldset>
+    <label class="inline"><input type="checkbox" name="initializeReadme" value="yes" checked> Initialize with a README</label>
+    <label>.gitignore template<select name="gitignore"><option value="">None</option><option value="node">Node.js</option><option value="python">Python</option><option value="rust">Rust</option></select></label>
+    <label>License<select name="license"><option value="">None</option><option value="mit">MIT</option><option value="apache-2.0">Apache-2.0</option><option value="agpl-3.0">AGPL-3.0</option></select></label>
+    <button class="button primary" type="submit">Create repository</button>
+  </form>
+</section>

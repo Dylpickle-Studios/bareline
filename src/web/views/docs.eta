@@ -1,0 +1,1 @@
+<section class="docs-shell"><aside><h2>Documentation</h2><nav aria-label="Documentation"><% it.documents.forEach(function(document) { %><a <%= document.slug === it.slug ? 'aria-current="page"' : '' %> href="/docs/<%= document.slug %>"><%= document.title %></a><% }) %></nav></aside><article class="markdown-body"><%~ it.html %></article></section>

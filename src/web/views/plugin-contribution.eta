@@ -1,0 +1,4 @@
+<section class="repo-shell">
+  <header><p class="eyebrow"><%= it.pluginName %></p><h1><%= it.contribution.title %></h1><% if (it.repository) { %><p><a href="/<%= it.repository.ownerSlug %>/<%= it.repository.slug %>">Back to <%= it.repository.ownerSlug %>/<%= it.repository.slug %></a></p><% } %></header>
+  <div class="plugin-contribution"><% it.contribution.blocks.forEach(function(block) { %><% if (block.type === 'text') { %><p><%= block.text %></p><% } else if (block.type === 'metric') { %><article class="plugin-metric"><span><%= block.label %></span><strong><%= block.value %></strong></article><% } else if (block.type === 'link') { %><p><a class="button" href="<%= block.href %>"><%= block.label %></a></p><% } %><% }) %></div>
+</section>

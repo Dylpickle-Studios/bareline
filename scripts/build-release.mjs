@@ -1,0 +1,49 @@
+import { execFile } from 'node:child_process';
+import { chmod, cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { arch, platform } from 'node:os';
+import { join, resolve } from 'node:path';
+import { promisify } from 'node:util';
+
+const packageData = JSON.parse(await readFile('package.json', 'utf8'));
+const target = resolve(
+  'release',
+  `${packageData.name}-${packageData.version}-${platform()}-${arch()}`,
+);
+await rm(target, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+await mkdir(target, { recursive: true });
+await mkdir(join(target, 'runtime'), { recursive: true });
+// Node's supported single-executable facility cannot reliably embed the native SQLite and Argon2
+// addons. Ship the exact tested Node runtime beside those addons instead, so the launcher does not
+// depend on a separately installed Node executable.
+await cp(process.execPath, join(target, 'runtime', 'node'));
+await chmod(join(target, 'runtime', 'node'), 0o755);
+for (const item of ['dist', 'docs']) await cp(item, join(target, item), { recursive: true });
+// Preserve the native addons built and tested on this platform. Reinstalling can silently select a
+// different binary or require a compiler/network during release assembly.
+await cp('node_modules', join(target, 'node_modules'), { recursive: true });
+for (const item of [
+  'package.json',
+  'package-lock.json',
+  'LICENSE',
+  'README.md',
+  'SECURITY.md',
+  'config.example.yml',
+])
+  await cp(item, join(target, item));
+await writeFile(
+  join(target, 'bareline'),
+  '#!/bin/sh\nset -eu\nHERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\nexec "$HERE/runtime/node" "$HERE/dist/cli/index.js" "$@"\n',
+  { mode: 0o755 },
+);
+await writeFile(
+  join(target, 'RELEASE.txt'),
+  `Self-contained application bundle for ${platform()} ${arch()}.\nThe tested Node.js runtime and native dependencies are included for this platform; no system Node installation is required. The system Git executable remains a runtime requirement.\n`,
+);
+await promisify(execFile)(
+  'npm',
+  ['prune', '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund'],
+  {
+    cwd: target,
+  },
+);
+process.stdout.write(`${target}\n`);

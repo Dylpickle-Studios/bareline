@@ -1,0 +1,71 @@
+server:
+  host: 0.0.0.0
+  port: 3000
+  publicUrl: http://localhost:3000
+  tls:
+    mode: proxy
+storage:
+  data: ./data
+  repositories: ./data/repositories
+  trash: ./data/trash
+  lfs: ./data/lfs
+  # Administrators may register repositories only from these roots. No filesystem scanning occurs.
+  importRoots: []
+database:
+  path: ./data/app.db
+git:
+  executable: git
+  timeoutMs: 15000
+search:
+  # Empty indexes only each repository's configured default branch.
+  indexedBranches: []
+  maxFilesPerBranch: 10000
+  maxCommitsPerBranch: 100
+ssh:
+  enabled: true
+  host: localhost
+registration:
+  mode: closed
+anonymous:
+  publicRepositories: true
+limits:
+  filePreviewBytes: 2097152
+  gitOutputBytes: 16777216
+  diffBytes: 10485760
+  diffLines: 20000
+  diffFiles: 500
+  diffFileBytes: 2097152
+  archiveBytes: 1073741824
+  lfsObjectBytes: 5368709120
+  requestBodyBytes: 10485760
+security:
+  sessionDays: 14
+  repositoryTrashDays: 7
+  # Set through an environment substitution in production, for example: ${BARELINE_MASTER_KEY}
+  # Generate 32 random bytes encoded as base64url. Required for encrypted plugin/provider secrets.
+  # masterKey: ${BARELINE_MASTER_KEY}
+plugins:
+  # Remote installation is denied unless the source is explicitly allowlisted.
+  allowedGitHosts: []
+  allowedNpmPackages: []
+  npmExecutable: npm
+  installTimeoutMs: 60000
+authentication:
+  # OIDC providers use authorization code + PKCE + state + nonce. Secrets should use ${ENV}.
+  oidc: []
+  # ldap:
+  #   enabled: false
+  #   url: ldaps://directory.example.com:636
+  #   bindDn: cn=bareline,ou=services,dc=example,dc=com
+  #   bindPassword: ${BARELINE_LDAP_PASSWORD}
+  #   baseDn: ou=people,dc=example,dc=com
+  #   usernameAttribute: uid
+  #   displayNameAttribute: displayName
+  #   emailAttribute: mail
+  #   autoCreate: false
+  reverseProxy:
+    enabled: false
+    identityHeader: x-authenticated-user
+    displayNameHeader: x-authenticated-name
+    allowedAddresses: [127.0.0.1, '::1']
+    autoCreate: false

@@ -1,0 +1,15 @@
+<section class="settings-shell">
+  <nav class="settings-nav" aria-label="User settings"><a href="/settings/profile">Profile</a><a href="/settings/credentials">Git credentials</a><a aria-current="page" href="/settings/appearance">Appearance</a><a href="/settings/sessions">Sessions</a></nav>
+  <div class="settings-content"><h1>Appearance</h1>
+    <form method="post" class="form-stack"><input type="hidden" name="csrf" value="<%= it.csrf %>">
+      <label>Theme<select name="theme"><% ['system','light','dark'].forEach(function(value) { %><option <%= it.preferences.theme === value ? 'selected' : '' %> value="<%= value %>"><%= value %></option><% }) %></select></label>
+      <label>Plugin theme<select name="pluginTheme"><option value="">None</option><% it.pluginThemes.forEach(function(theme) { %><option value="<%= theme.key %>" <%= it.preferences.pluginTheme === theme.key ? 'selected' : '' %>><%= theme.title %> · <%= theme.pluginName %></option><% }) %></select></label>
+      <p class="muted">Plugin themes use a validated color-only manifest and cannot inject CSS.</p>
+      <label>Accent<select name="accent"><% ['violet','green','amber'].forEach(function(value) { %><option <%= it.preferences.accent === value ? 'selected' : '' %> value="<%= value %>"><%= value %></option><% }) %></select></label>
+      <label>UI font<select name="uiFont"><option value="system">System sans</option><option value="humanist" <%= it.preferences.uiFont === 'humanist' ? 'selected' : '' %>>Humanist sans</option></select></label>
+      <label>Code font<select name="codeFont"><option value="system">System mono</option><option value="mono" <%= it.preferences.codeFont === 'mono' ? 'selected' : '' %>>Compact mono</option></select></label>
+      <label class="inline"><input type="checkbox" name="reducedMotion" value="yes" <%= it.preferences.reducedMotion ? 'checked' : '' %>> Reduce non-essential motion</label>
+      <button class="button" type="submit">Save appearance</button>
+    </form>
+  </div>
+</section>

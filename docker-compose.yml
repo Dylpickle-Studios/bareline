@@ -1,0 +1,15 @@
+services:
+  bareline:
+    build: .
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    volumes:
+      - bareline-data:/var/lib/bareline
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+volumes:
+  bareline-data:

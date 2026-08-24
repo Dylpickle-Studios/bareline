@@ -1,0 +1,71 @@
+{
+  "name": "bareline",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A focused Git server and Git web interface, without project-management or CI clutter.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "bin": {
+    "bareline": "dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node scripts/copy-assets.mjs",
+    "dev": "tsx watch src/cli/index.ts serve --config config.yml",
+    "start": "node dist/cli/index.js serve",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format:check": "prettier --check .",
+    "format": "prettier --write .",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:watch": "vitest",
+    "check": "npm run typecheck && npm run lint && npm test && npm run build",
+    "release:bundle": "npm run build && node scripts/build-release.mjs",
+    "smoke:release": "node scripts/smoke-release.mjs",
+    "smoke:docker": "node scripts/smoke-docker.mjs"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.0.2",
+    "@fastify/formbody": "^8.0.2",
+    "@fastify/helmet": "^13.0.1",
+    "@fastify/multipart": "^10.1.1",
+    "@fastify/rate-limit": "^10.3.0",
+    "@fastify/static": "^10.1.3",
+    "@fastify/swagger": "^9.5.1",
+    "@fastify/swagger-ui": "^6.1.1",
+    "@simplewebauthn/server": "^13.3.2",
+    "argon2": "^0.44.0",
+    "better-sqlite3": "^12.2.0",
+    "eta": "^4.0.1",
+    "fastify": "^5.6.0",
+    "ldapts": "^9.0.0",
+    "markdown-it": "^14.1.0",
+    "openid-client": "^6.8.7",
+    "sanitize-html": "^2.17.0",
+    "yaml": "^2.8.1",
+    "zod": "^4.1.5"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.34.0",
+    "@playwright/test": "^1.62.1",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/markdown-it": "^14.1.2",
+    "@types/node": "^24.3.0",
+    "@types/sanitize-html": "^2.16.0",
+    "eslint": "^9.34.0",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.6.2",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.42.0",
+    "vitest": "^3.2.4"
+  },
+  "allowScripts": {
+    "argon2@0.44.0": true,
+    "better-sqlite3@12.11.1": true,
+    "esbuild@0.28.2": true
+  }
+}

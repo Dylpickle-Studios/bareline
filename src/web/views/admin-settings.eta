@@ -1,0 +1,28 @@
+<section class="admin-shell">
+  <nav class="settings-nav" aria-label="Administration"><a href="/admin">Overview</a><a href="/admin/users">Users</a><a href="/admin/invites">Invites</a><a href="/admin/repositories">Repositories</a><a href="/admin/plugins">Plugins</a><a href="/admin/audit">Audit log</a><a aria-current="page" href="/admin/settings">Settings</a></nav>
+  <div class="settings-content">
+    <h1>Application settings</h1>
+    <p>Changes are stored transactionally, audited, and applied immediately. Deployment secrets and provider endpoints remain controlled by YAML and environment variables.</p>
+    <form method="post" class="form-stack">
+      <input type="hidden" name="csrf" value="<%= it.csrf %>">
+      <fieldset><legend>Access</legend>
+        <label>Registration<select name="registrationMode"><% ['closed','invite','open'].forEach(function(mode) { %><option value="<%= mode %>" <%= it.settings.registrationMode === mode ? 'selected' : '' %>><%= mode %></option><% }) %></select></label>
+        <label class="inline"><input type="checkbox" name="anonymousPublicRepositories" value="yes" <%= it.settings.anonymousPublicRepositories ? 'checked' : '' %>> Allow anonymous browsing of public repositories</label>
+        <label>Session duration (days)<input type="number" min="1" max="365" name="sessionDays" value="<%= it.settings.sessionDays %>" required></label>
+        <label>Repository trash retention (days)<input type="number" min="1" max="365" name="repositoryTrashDays" value="<%= it.settings.repositoryTrashDays %>" required></label>
+      </fieldset>
+      <fieldset><legend>Repository resource limits</legend>
+        <% [['filePreviewBytes','File preview bytes'],['diffBytes','Diff bytes'],['diffLines','Diff lines'],['diffFiles','Diff files'],['diffFileBytes','Per-file diff bytes'],['archiveBytes','Archive bytes'],['lfsObjectBytes','LFS object bytes']].forEach(function(field) { %><label><%= field[1] %><input type="number" min="1" name="<%= field[0] %>" value="<%= it.settings[field[0]] %>" required></label><% }) %>
+      </fieldset>
+      <button class="button" type="submit">Save settings</button>
+    </form>
+    <section><h2>Authentication providers</h2><p class="muted">Provider credentials and trust boundaries are deployment configuration and are never exposed here.</p>
+      <ul class="credential-list">
+        <% it.providers.oidc.forEach(function(provider) { %><li><span><strong><%= provider.name %></strong> · OIDC · <%= provider.issuer %> · automatic accounts <%= provider.autoCreate ? 'enabled' : 'disabled' %></span></li><% }) %>
+        <% if (it.providers.ldap) { %><li><span><strong>LDAP</strong> · <%= it.providers.ldap.enabled ? 'enabled' : 'disabled' %> · <%= it.providers.ldap.url %> · automatic accounts <%= it.providers.ldap.autoCreate ? 'enabled' : 'disabled' %></span></li><% } %>
+        <% if (it.providers.reverseProxy) { %><li><span><strong>Reverse proxy</strong> · <%= it.providers.reverseProxy.enabled ? 'enabled' : 'disabled' %> · identity header <code><%= it.providers.reverseProxy.identityHeader %></code></span></li><% } %>
+        <% if (!it.providers.oidc.length && !it.providers.ldap && !it.providers.reverseProxy) { %><li>No external authentication providers configured.</li><% } %>
+      </ul>
+    </section>
+  </div>
+</section>

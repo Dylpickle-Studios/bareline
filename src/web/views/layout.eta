@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en" data-theme="<%= it.theme ?? it.user?.theme ?? 'system' %>" data-accent="<%= it.user?.accent ?? 'violet' %>">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title><%= it.title ? `${it.title} · ${it.product.name}` : it.product.name %></title>
+  <link rel="stylesheet" href="/assets/app.css">
+  <% if (it.pluginThemeUrl) { %><link rel="stylesheet" href="<%= it.pluginThemeUrl %>"><% } %>
+  <script type="module" src="/assets/app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#content">Skip to content</a>
+  <header class="site-header">
+    <a class="brand" href="/" aria-label="<%= it.product.name %> home">
+      <img src="<%= it.product.logoPath %>" alt="" width="28" height="28">
+      <span><%= it.product.name %></span>
+    </a>
+    <nav aria-label="Global navigation">
+      <a href="/explore">Explore</a>
+      <a href="/docs">Docs</a>
+      <% if (it.user) { %>
+        <% (it.pluginNavigation ?? []).forEach(function(item) { %><a href="<%= item.href %>"><%= item.title %></a><% }) %>
+        <button class="quiet" data-palette-open aria-haspopup="dialog">Search <kbd>⌘K</kbd></button>
+        <a href="/groups">Groups</a>
+        <% if (it.user.isAdmin) { %><a href="/admin">Admin</a><% } %>
+        <a href="/settings/profile"><%= it.user.displayName %></a>
+      <% } else { %>
+        <a href="/login">Sign in</a>
+        <a class="button" href="/register">Create account</a>
+      <% } %>
+    </nav>
+  </header>
+  <main id="content"><%~ it.body %></main>
+  <dialog id="command-palette" aria-labelledby="palette-title">
+    <form method="dialog" class="palette">
+      <label id="palette-title" for="palette-search">Go anywhere</label>
+      <input id="palette-search" type="search" autocomplete="off" placeholder="Repositories, files, settings…">
+      <div id="palette-results" role="listbox" aria-label="Results"></div>
+      <button class="sr-only" value="cancel">Close</button>
+    </form>
+  </dialog>
+</body>
+</html>

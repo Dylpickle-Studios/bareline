@@ -1,0 +1,20 @@
+<section class="playground-shell">
+  <header class="page-heading"><div><p class="eyebrow">Plugin development</p><h1>Plugin Playground</h1><p>Experiment against a mocked repository and capability API. Code runs in a disposable browser sandbox, never in the server process.</p></div></header>
+  <div class="playground-editors">
+    <label>Manifest<textarea id="playground-manifest" spellcheck="false">id: playground.example
+name: Playground Example
+version: 0.0.1
+apiVersion: 1
+runtime: sandboxed
+permissions: [repositoryContents.read, storage.plugin]</textarea></label>
+    <label>Plugin code<textarea id="playground-code" spellcheck="false">host.log('info', `Repository: ${host.repository.owner}/${host.repository.name}`);
+const files = await host.readTextFiles();
+const words = files.reduce((total, file) => total + file.content.split(/\s+/).filter(Boolean).length, 0);
+host.storage.set('last-count', words);
+host.render({ type: 'stat', label: 'Words', value: words });</textarea></label>
+    <label>UI contribution<textarea id="playground-ui" spellcheck="false">{ "type": "stat", "label": "Files", "value": 2 }</textarea></label>
+    <label>CSS<textarea id="playground-css" spellcheck="false">.plugin-preview { color: #347d64; }</textarea></label>
+  </div>
+  <div class="playground-actions"><button class="button" id="playground-run" type="button">Run</button><span id="playground-status" role="status"></span></div>
+  <section class="playground-output"><h2>Preview</h2><iframe id="playground-frame" sandbox="allow-scripts" credentialless title="Sandboxed plugin preview" src="/admin/plugins/playground/frame"></iframe><h2>Logs, API calls, events, permissions</h2><pre id="playground-logs" tabindex="0">Ready.</pre></section>
+</section>

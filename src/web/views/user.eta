@@ -1,0 +1,9 @@
+<section class="repo-shell user-page">
+  <header class="profile-header">
+    <% if (it.account.hasAvatar) { %><img class="profile-image" src="/avatars/<%= it.account.username %>" width="96" height="96" alt=""><% } else { %><span class="avatar-placeholder" aria-hidden="true"><%= it.account.displayName.slice(0, 1).toUpperCase() %></span><% } %>
+    <div><p class="eyebrow">User</p><h1><%= it.account.displayName %></h1><p class="muted">@<%= it.account.username %><% if (it.account.email) { %> · <a href="mailto:<%= it.account.email %>"><%= it.account.email %></a><% } %></p></div>
+  </header>
+  <h2>Repositories</h2>
+  <% if (!it.repositories.length) { %><p class="empty">No repositories are visible to you.</p><% } %>
+  <ul class="repo-list"><% it.repositories.forEach(function(repository) { %><li><a href="/<%= repository.ownerSlug %>/<%= repository.slug %>"><strong><%= repository.slug %></strong></a><span class="visibility"><%= repository.visibility %></span><p><%= repository.description %></p></li><% }) %></ul>
+</section>

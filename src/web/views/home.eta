@@ -1,0 +1,9 @@
+<section class="hero">
+  <p class="eyebrow">Git, without the clutter</p>
+  <h1>A focused home for your repositories.</h1>
+  <p>Browse code, understand history, and move work over SSH or HTTPS—without project-management machinery getting in the way.</p>
+  <div class="actions">
+    <% if (it.user) { %><a class="button primary" href="/repositories/new">Create repository</a><% } else { %>
+    <a class="button primary" href="/register">Create your account</a><a class="button" href="/login">Sign in</a><% } %>
+  </div>
+</section>
