@@ -5,6 +5,10 @@
 Bareline is a lightweight, server-rendered home for repositories, files, commits, diffs, branches,
 tags, blame, search, cloning, and pushing.
 
+Git-focused collaboration includes protected branches, repository-scoped read-only deploy keys,
+scheduled pull/push mirrors, trusted signature identities, repository templates, activity feeds,
+pinned/recent repositories, conflict-safe browser editing, and encrypted off-site backup uploads.
+
 This project intentionally does **not** provide issues, pull requests, CI/CD, project boards,
 registries, deployments, or DevOps dashboards. Plugins may add independent capabilities, but those
 features will not become core abstractions.
@@ -25,7 +29,7 @@ work, not deferred aspirations.
 
 ## Design preview and container image
 
-The `Deploy design preview` workflow publishes the static interface preview from `demo/` to GitHub
+The `Deploy design preview` workflow publishes the interactive, seeded interface demo from `demo/` to GitHub
 Pages when changes land on `main`. Enable **Settings → Pages → Source: GitHub Actions** once, then
 visit `https://OWNER.github.io/REPOSITORY/`. As an alternative, set a `PAGES_ADMIN_TOKEN` Actions
 secret with **Pages: write** and **Administration: write** permissions; the workflow will enable the

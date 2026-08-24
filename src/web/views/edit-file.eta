@@ -3,9 +3,10 @@
   <% if (it.error) { %><div class="notice error" role="alert"><%= it.error %></div><% } %>
   <form method="post" class="form-stack">
     <input type="hidden" name="csrf" value="<%= it.csrf %>">
-    <% if (!it.exists) { %><label>Path<input name="path" value="<%= it.path %>" required maxlength="4096" placeholder="docs/guide.md"></label><% } %>
+    <label>Path<input name="path" value="<%= it.path %>" required maxlength="4096" placeholder="docs/guide.md"><% if (it.exists) { %><small>Change the path to rename or move this file.</small><% } %></label>
     <label>Branch<input name="branch" value="<%= it.ref %>" required maxlength="255"></label>
-    <label>Contents<textarea name="content" rows="24" spellcheck="false"><%= it.content %></textarea></label>
+    <label>Contents<textarea id="file-editor" name="content" rows="24" spellcheck="false"><%= it.content %></textarea></label>
+    <% if ((it.path || '').toLowerCase().endsWith('.md')) { %><details data-markdown-preview data-csrf="<%= it.csrf %>"><summary>Markdown preview</summary><article id="markdown-preview" class="markdown-body" aria-live="polite"><p class="muted">Preparing preview…</p></article></details><% } %>
     <label>Commit message<input name="message" value="<%= it.exists ? `Update ${it.path}` : 'Create file' %>" required maxlength="10000"></label>
     <div class="actions"><button class="button primary" name="action" value="save" type="submit">Commit changes</button><% if (it.exists) { %><button class="button danger" name="action" value="delete" type="submit" data-confirm="Delete this file with a new commit?">Delete file</button><% } %></div>
   </form>

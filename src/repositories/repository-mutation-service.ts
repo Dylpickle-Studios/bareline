@@ -8,6 +8,7 @@ import type { GitRunner } from '../git/git-runner.js';
 import { validateObjectId, validateRef, validateRepoPath } from '../security/validation.js';
 import type { RepositoryService } from './repository-service.js';
 import type { Repository, RepositoryEventPublisher } from './repository-types.js';
+import type { RepositoryEnhancementService } from './repository-enhancement-service.js';
 
 export class RepositoryMutationService {
   private publishEvent: RepositoryEventPublisher = () => undefined;
@@ -18,6 +19,7 @@ export class RepositoryMutationService {
     private readonly repositories: RepositoryService,
     private readonly config: AppConfig,
     private readonly audit: AuditService,
+    private readonly enhancements?: RepositoryEnhancementService,
   ) {}
 
   setEventPublisher(publisher: RepositoryEventPublisher): void {
@@ -71,6 +73,7 @@ export class RepositoryMutationService {
     if (message.length < 1 || message.length > 10_000 || message.includes('\0')) {
       throw new WebCommitInputError('Commit message must be between 1 and 10,000 characters', 400);
     }
+    this.enhancements?.assertWebCommit(input.repository.id, branch, message);
     const repositoryPath = await this.repositories.storagePath(input.repository);
     const oldCommit = await this.repositories.resolveCommit(input.repository, branch);
     const temporaryRoot = join(this.config.storage.data, 'tmp');
@@ -176,6 +179,13 @@ export class RepositoryMutationService {
         ...repositoryEvent(input.repository),
         branch,
       });
+      this.enhancements?.recordActivity(
+        input.repository.id,
+        input.actorUserId,
+        'commit.createdViaWeb',
+        branch,
+        { fileCount: files.length, commitId },
+      );
       return commitId;
     } finally {
       await rm(temporaryDirectory, { recursive: true, force: true });
@@ -209,6 +219,7 @@ export class RepositoryMutationService {
       metadata: { branch: name },
     });
     this.publishEvent('branch.created', { ...repositoryEvent(repository), branch: name });
+    this.enhancements?.recordActivity(repository.id, actorUserId, 'branch.created', name);
   }
 
   async deleteBranch(
@@ -221,6 +232,7 @@ export class RepositoryMutationService {
     const name = validateRef(nameInput);
     if (name === repository.defaultBranch)
       throw new WebCommitConflictError('The default branch cannot be deleted');
+    this.enhancements?.assertBranchDeletion(repository.id, name);
     const path = await this.repositories.storagePath(repository);
     await this.git.run(['--git-dir', path, 'update-ref', '-d', `refs/heads/${name}`]);
     this.audit.record({
@@ -231,6 +243,7 @@ export class RepositoryMutationService {
       metadata: { branch: name },
     });
     this.publishEvent('branch.deleted', { ...repositoryEvent(repository), branch: name });
+    this.enhancements?.recordActivity(repository.id, actorUserId, 'branch.deleted', name);
   }
 
   async createTag(
@@ -260,6 +273,7 @@ export class RepositoryMutationService {
       metadata: { tag: name },
     });
     this.publishEvent('tag.created', { ...repositoryEvent(repository), tag: name });
+    this.enhancements?.recordActivity(repository.id, actorUserId, 'tag.created', name);
   }
 
   async deleteTag(repository: Repository, actorUserId: number, nameInput: string): Promise<void> {
@@ -276,6 +290,7 @@ export class RepositoryMutationService {
       metadata: { tag: name },
     });
     this.publishEvent('tag.deleted', { ...repositoryEvent(repository), tag: name });
+    this.enhancements?.recordActivity(repository.id, actorUserId, 'tag.deleted', name);
   }
 }
 

@@ -42,7 +42,7 @@ export interface SignatureInfo {
   signer: string | null;
   keyId: string | null;
   fingerprint: string | null;
-  identityTrusted: false;
+  identityTrusted: boolean;
 }
 
 export interface Comparison {

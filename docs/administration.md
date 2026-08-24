@@ -1,5 +1,21 @@
 # Administration
 
+## Git-focused repository controls
+
+Repository settings include branch policies, read-only per-repository deploy keys, pull/push
+mirrors, and template designation. Branch policies can block force pushes and deletion, require
+signed commits for web-write eligibility, and require a bounded literal commit-message prefix.
+Administrators can register verified OpenPGP or SSH fingerprints under Application settings;
+Bareline continues to distinguish cryptographic validity from locally assigned identity trust.
+
+Repository activity is append-oriented and deliberately limited to Git/repository events. Signed
+push policies that need full commit-chain validation should be enforced by the upstream receive
+environment; Bareline never installs repository-controlled hooks.
+
+Run `bareline repo mirrors-run --config config.yml` from a systemd timer or cron job to process up
+to 50 due mirrors per invocation. Failures are recorded without preventing other due mirrors from
+running; administrators can also use **Run now** in repository settings.
+
 ## Users, groups, and permissions
 
 Groups are lightweight repository owners with member, manager, and owner roles. Repository access

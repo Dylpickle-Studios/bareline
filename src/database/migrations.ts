@@ -377,4 +377,109 @@ export const migrations: readonly Migration[] = [
       CREATE INDEX repository_transfers_target ON repository_transfers(target_user_id, expires_at);
     `,
   },
+  {
+    version: 14,
+    name: 'git_focused_repository_enhancements',
+    sql: `
+      CREATE TABLE repository_policies (
+        repository_id INTEGER NOT NULL REFERENCES repositories(id) ON DELETE CASCADE,
+        ref_pattern TEXT NOT NULL,
+        block_force_push INTEGER NOT NULL DEFAULT 1 CHECK(block_force_push IN (0, 1)),
+        block_deletion INTEGER NOT NULL DEFAULT 1 CHECK(block_deletion IN (0, 1)),
+        require_signed_commits INTEGER NOT NULL DEFAULT 0 CHECK(require_signed_commits IN (0, 1)),
+        commit_message_pattern TEXT,
+        created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY(repository_id, ref_pattern)
+      ) WITHOUT ROWID, STRICT;
+
+      CREATE TABLE repository_deploy_keys (
+        id INTEGER PRIMARY KEY,
+        repository_id INTEGER NOT NULL REFERENCES repositories(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        fingerprint TEXT NOT NULL UNIQUE,
+        public_key TEXT NOT NULL,
+        read_only INTEGER NOT NULL DEFAULT 1 CHECK(read_only = 1),
+        created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL,
+        last_used_at TEXT
+      ) STRICT;
+      CREATE INDEX repository_deploy_keys_repository ON repository_deploy_keys(repository_id);
+
+      CREATE TABLE trusted_signers (
+        id INTEGER PRIMARY KEY,
+        fingerprint TEXT NOT NULL COLLATE NOCASE UNIQUE,
+        identity TEXT NOT NULL,
+        key_type TEXT NOT NULL CHECK(key_type IN ('openpgp', 'ssh')),
+        public_key TEXT,
+        created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL,
+        revoked_at TEXT
+      ) STRICT;
+
+      CREATE TABLE repository_mirrors (
+        repository_id INTEGER PRIMARY KEY REFERENCES repositories(id) ON DELETE CASCADE,
+        direction TEXT NOT NULL CHECK(direction IN ('pull', 'push')),
+        remote_url TEXT NOT NULL,
+        interval_minutes INTEGER NOT NULL CHECK(interval_minutes BETWEEN 5 AND 10080),
+        enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0, 1)),
+        last_run_at TEXT,
+        last_success_at TEXT,
+        last_error TEXT,
+        next_run_at TEXT NOT NULL,
+        created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL
+      ) STRICT;
+      CREATE INDEX repository_mirrors_due ON repository_mirrors(enabled, next_run_at);
+
+      CREATE TABLE repository_templates (
+        repository_id INTEGER PRIMARY KEY REFERENCES repositories(id) ON DELETE CASCADE,
+        enabled_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        enabled_at TEXT NOT NULL
+      ) STRICT;
+
+      CREATE TABLE repository_activity (
+        id INTEGER PRIMARY KEY,
+        repository_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
+        actor_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        action TEXT NOT NULL,
+        ref_name TEXT,
+        metadata_json TEXT NOT NULL DEFAULT '{}' CHECK(json_valid(metadata_json)),
+        created_at TEXT NOT NULL
+      ) STRICT;
+      CREATE INDEX repository_activity_feed ON repository_activity(repository_id, created_at DESC, id DESC);
+
+      CREATE TABLE user_pinned_repositories (
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        repository_id INTEGER NOT NULL REFERENCES repositories(id) ON DELETE CASCADE,
+        position INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY(user_id, repository_id)
+      ) WITHOUT ROWID, STRICT;
+
+      CREATE TABLE user_recent_repositories (
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        repository_id INTEGER NOT NULL REFERENCES repositories(id) ON DELETE CASCADE,
+        viewed_at TEXT NOT NULL,
+        PRIMARY KEY(user_id, repository_id)
+      ) WITHOUT ROWID, STRICT;
+      CREATE INDEX user_recent_repositories_time ON user_recent_repositories(user_id, viewed_at DESC);
+
+      CREATE TABLE backup_destinations (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        endpoint TEXT NOT NULL,
+        region TEXT NOT NULL,
+        bucket TEXT NOT NULL,
+        object_prefix TEXT NOT NULL DEFAULT '',
+        access_key_encrypted BLOB NOT NULL,
+        secret_key_encrypted BLOB NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0, 1)),
+        created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL,
+        last_success_at TEXT,
+        last_error TEXT
+      ) STRICT;
+    `,
+  },
 ];

@@ -3,6 +3,10 @@
 Every boundary in the threat model has an executable regression test. This matrix is reviewed when
 the threat model changes.
 
+Repository-enhancement coverage includes policy enforcement, receive configuration, activity and
+private discovery state, strict deploy-key authorization, mirror allowlists, authenticated backup
+encryption, shared API authorization, and OpenAPI exposure.
+
 | Threat-model control                    | Regression coverage                                                                                                     |
 | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | Traversal and symlinks                  | `validation.test.ts`, `repository-import.integration.test.ts`                                                           |

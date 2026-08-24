@@ -35,6 +35,8 @@ remain labeled pre-1.0 until every **Required before 1.0** item is checked.
 - [x] Recovery codes and administrator-assisted password recovery without secret disclosure
 - [x] Complete passkey list/rename/remove UI and logout-everywhere semantics after credential changes
 - [x] Repository settings UI: collaborators, visibility, default branch, rename, transfer and trash
+- [x] Protected branches, read-only deploy keys, allowlisted mirrors, templates, activity and repository discovery
+- [x] Trusted signer lifecycle and encrypted S3-compatible backup destinations/uploads
 - [x] Existing bare/working-tree import UI and CLI restricted to configured allowlisted roots
 - [x] Browser file upload and multi-file commits with hard aggregate limits
 - [x] Group creation/member/permission administration UI and API

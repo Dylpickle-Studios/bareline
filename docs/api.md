@@ -28,6 +28,11 @@ and creates web commits. File writes require base64 content, a branch, and a com
 requires the exact `owner/repository` confirmation query and uses delayed trash semantics.
 Repository updates can also transfer ownership to a group the caller owns.
 
+Repository subresources expose activity, branch policies, deploy keys, mirror configuration, and
+pin state. These routes call the same enhancement service as HTML settings and therefore retain the
+same repository permission checks and audit behavior. Deploy-key material is returned only to
+repository administrators; private activity remains subject to repository read authorization.
+
 ## Users, groups, and administration
 
 User responses omit credentials and hidden email. Group responses are limited to members and expose

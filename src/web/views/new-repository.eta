@@ -6,6 +6,7 @@
     <label>Owner<select name="owner"><option value="user:<%= it.user.username %>"><%= it.user.username %> (personal)</option><% it.groups.forEach(function(group) { %><option value="group:<%= group.slug %>"><%= group.displayName %></option><% }) %></select></label>
     <label>Name<input name="slug" required maxlength="39" pattern="[a-z0-9][a-z0-9-]*"></label>
     <label>Description<input name="description" maxlength="240"></label>
+    <% if (it.templates?.length) { %><label>Start from template<select name="templateId"><option value="">Blank repository</option><% it.templates.forEach(function(repository) { %><option value="<%= repository.id %>"><%= repository.ownerSlug %>/<%= repository.slug %></option><% }) %></select></label><% } %>
     <fieldset><legend>Visibility</legend>
       <label class="inline"><input type="radio" name="visibility" value="private" checked> Private</label>
       <label class="inline"><input type="radio" name="visibility" value="public"> Public</label>

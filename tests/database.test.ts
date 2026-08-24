@@ -9,7 +9,7 @@ describe('database migrations', () => {
     const database = openDatabase(config.database.path);
     expect(database.pragma('foreign_keys', { simple: true })).toBe(1);
     expect(database.prepare('SELECT count(*) AS count FROM schema_migrations').get()).toEqual({
-      count: 13,
+      count: 14,
     });
     database
       .prepare(
@@ -22,7 +22,7 @@ describe('database migrations', () => {
     database.close();
     const reopened = openDatabase(config.database.path);
     expect(reopened.prepare('SELECT count(*) AS count FROM schema_migrations').get()).toEqual({
-      count: 13,
+      count: 14,
     });
     reopened.close();
     expect(readFileSync(config.database.path).length).toBeGreaterThan(0);

@@ -34,6 +34,9 @@ const configSchema = z.object({
     executable: z.string().min(1).default('git'),
     timeoutMs: positiveInt.default(15_000),
   }),
+  mirrors: z
+    .object({ allowedHosts: z.array(z.string().min(1).max(253)).max(100).default([]) })
+    .optional(),
   search: z
     .object({
       indexedBranches: z.array(z.string().min(1).max(255)).max(50).default([]),

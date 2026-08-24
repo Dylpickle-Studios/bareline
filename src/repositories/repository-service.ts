@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { product } from '../app/metadata.js';
-import { lstat, mkdir, realpath } from 'node:fs/promises';
+import { lstat, mkdir, realpath, rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import type { AuditService } from '../audit/audit-service.js';
 import type { AppConfig } from '../config/config.js';
@@ -492,6 +492,42 @@ export class RepositoryService {
       'HEAD',
       `refs/heads/${safeBranch}`,
     ]);
+  }
+
+  async populateFromTemplate(target: Repository, source: Repository): Promise<void> {
+    const sourcePath = await this.storagePath(source);
+    const targetPath = await this.storagePath(target);
+    await this.git.run([
+      '--git-dir',
+      targetPath,
+      'fetch',
+      '--prune',
+      sourcePath,
+      '+refs/heads/*:refs/heads/*',
+      '+refs/tags/*:refs/tags/*',
+    ]);
+    target.defaultBranch = source.defaultBranch;
+    await this.git.run([
+      '--git-dir',
+      targetPath,
+      'symbolic-ref',
+      'HEAD',
+      `refs/heads/${validateRef(source.defaultBranch)}`,
+    ]);
+    this.database
+      .prepare('UPDATE repositories SET default_branch=?, updated_at=? WHERE id=?')
+      .run(source.defaultBranch, new Date().toISOString(), target.id);
+  }
+
+  async discardFailedCreation(repository: Repository): Promise<void> {
+    if (repository.storageKind !== 'hosted_bare' || repository.storagePath)
+      throw new ValidationError('Only newly hosted repositories can be discarded');
+    const path = this.hostedPath(repository.storageId);
+    const root = resolve(this.config.storage.repositories);
+    if (!resolve(path).startsWith(`${root}/`))
+      throw new ValidationError('Repository storage path is unsafe');
+    await rm(path, { recursive: true, force: true });
+    this.database.prepare('DELETE FROM repositories WHERE id=?').run(repository.id);
   }
 
   async listTree(repository: Repository, ref: string, directory = ''): Promise<TreeEntry[]> {

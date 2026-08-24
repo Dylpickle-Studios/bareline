@@ -1,6 +1,35 @@
 const palette = document.querySelector('#command-palette');
 const paletteInput = document.querySelector('#palette-search');
 
+const markdownPreview = document.querySelector('[data-markdown-preview]');
+if (markdownPreview instanceof HTMLElement) {
+  const editor = document.querySelector('#file-editor');
+  const output = document.querySelector('#markdown-preview');
+  let previewRequest;
+  const updatePreview = () => {
+    clearTimeout(previewRequest);
+    previewRequest = setTimeout(async () => {
+      if (!(editor instanceof HTMLTextAreaElement) || !(output instanceof HTMLElement)) return;
+      const response = await fetch('/api/v1/markdown-preview', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-csrf-token': markdownPreview.dataset.csrf ?? '',
+        },
+        body: JSON.stringify({ markdown: editor.value }),
+      });
+      if (!response.ok) {
+        output.textContent = 'Preview unavailable.';
+        return;
+      }
+      const result = await response.json();
+      output.innerHTML = result.html;
+    }, 180);
+  };
+  markdownPreview.addEventListener('toggle', updatePreview);
+  editor?.addEventListener('input', updatePreview);
+}
+
 document.querySelectorAll('[data-dialog-open]').forEach((button) => {
   button.addEventListener('click', () => {
     if (!(button instanceof HTMLButtonElement)) return;

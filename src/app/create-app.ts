@@ -13,6 +13,7 @@ import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import { AuditService } from '../audit/audit-service.js';
+import { BackupDestinationService } from '../backup/backup-destination-service.js';
 import {
   administrationSystemResponse,
   collaboratorListResponse,
@@ -93,6 +94,7 @@ import {
   RepositoryService,
 } from '../repositories/repository-service.js';
 import { RepositoryMutationService } from '../repositories/repository-mutation-service.js';
+import { RepositoryEnhancementService } from '../repositories/repository-enhancement-service.js';
 import { RepositoryAdminService } from '../repositories/repository-admin-service.js';
 import type { Visibility } from '../repositories/repository-types.js';
 import { ValidationError } from '../security/validation.js';
@@ -215,6 +217,63 @@ const repositoryWildcardParameters = {
     '*': { type: 'string' },
   },
 };
+
+const enhancementItem = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    id: { type: 'integer' },
+    name: { type: 'string' },
+    fingerprint: { type: 'string' },
+    identity: { type: 'string' },
+    keyType: { type: 'string' },
+    refPattern: { type: 'string' },
+    blockForcePush: { type: 'boolean' },
+    blockDeletion: { type: 'boolean' },
+    requireSignedCommits: { type: 'boolean' },
+    commitMessagePrefix: { type: ['string', 'null'] },
+    action: { type: 'string' },
+    refName: { type: ['string', 'null'] },
+    metadataJson: { type: 'string' },
+    createdAt: { type: 'string' },
+    username: { type: ['string', 'null'] },
+    direction: { type: 'string' },
+    remoteUrl: { type: 'string' },
+    intervalMinutes: { type: 'integer' },
+    enabled: { type: 'integer' },
+    lastRunAt: { type: ['string', 'null'] },
+    lastSuccessAt: { type: ['string', 'null'] },
+    lastError: { type: ['string', 'null'] },
+    nextRunAt: { type: 'string' },
+    endpoint: { type: 'string' },
+    region: { type: 'string' },
+    bucket: { type: 'string' },
+    objectPrefix: { type: 'string' },
+    lastUsedAt: { type: ['string', 'null'] },
+  },
+} as const;
+const enhancementListResponse = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['items'],
+  properties: { items: { type: 'array', items: enhancementItem } },
+} as const;
+const enhancementMutationResponse = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    id: { type: 'integer' },
+    created: { type: 'boolean' },
+    enabled: { type: 'boolean' },
+    pinned: { type: 'boolean' },
+  },
+} as const;
+const mirrorResponse = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['mirror'],
+  properties: { mirror: { anyOf: [enhancementItem, { type: 'null' }] } },
+} as const;
 
 const repositoryCreateBody = {
   type: 'object',
@@ -594,7 +653,21 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
     tags: await browser.tags(repository),
   });
   const archives = new ArchiveService(config, repositories);
-  const mutations = new RepositoryMutationService(database, git, repositories, config, audit);
+  const enhancements = new RepositoryEnhancementService(
+    database,
+    git,
+    repositories,
+    audit,
+    config.mirrors?.allowedHosts ?? [],
+  );
+  const mutations = new RepositoryMutationService(
+    database,
+    git,
+    repositories,
+    config,
+    audit,
+    enhancements,
+  );
   const repositoryAdmin = new RepositoryAdminService(database, repositories, config, audit);
   const groups = new GroupService(database, audit);
   const search = new SearchService(database, git, repositories, browser, config);
@@ -727,11 +800,23 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
     24 * 60 * 60 * 1000,
   );
   trashTimer.unref();
+  const mirrorTimer = setInterval(() => {
+    void enhancements
+      .runDueMirrors()
+      .then((result) => {
+        if (result.failed) app.log.warn(result, 'one or more repository mirrors failed');
+      })
+      .catch((error: unknown) => {
+        app.log.error({ err: error }, 'repository mirror worker failed');
+      });
+  }, 60_000);
+  mirrorTimer.unref();
   await repositoryAdmin.purgeExpiredTrash();
   app.addHook('onClose', () => {
     clearInterval(searchTimer);
     clearInterval(pluginEventTimer);
     clearInterval(trashTimer);
+    clearInterval(mirrorTimer);
     database.close();
   });
 
@@ -758,7 +843,18 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
 
   app.get('/', async (request, reply) => {
     const current = session(request);
-    return reply.type('text/html').send(await render('home', { user: current?.user ?? null }));
+    const accessible = current ? repositories.listAccessible(current.user.id, 1, 100) : [];
+    const pinned = current ? new Set(enhancements.pinnedIds(current.user.id)) : new Set<number>();
+    const recentOrder = current ? enhancements.recentIds(current.user.id) : [];
+    return reply.type('text/html').send(
+      await render('home', {
+        user: current?.user ?? null,
+        pinnedRepositories: accessible.filter((repository) => pinned.has(repository.id)),
+        recentRepositories: recentOrder
+          .map((id) => accessible.find((repository) => repository.id === id))
+          .filter(Boolean),
+      }),
+    );
   });
 
   app.get('/explore', async (request, reply) => {
@@ -776,6 +872,33 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
     const gitVersion = await git.run(['--version'], { timeoutMs: 2000, maxOutputBytes: 1024 });
     return reply.send({ status: 'ok', git: gitVersion.stdout.toString('utf8').trim() });
   });
+
+  app.post(
+    '/api/v1/markdown-preview',
+    {
+      schema: apiContract('markdown', {
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['markdown'],
+          properties: { markdown: { type: 'string', maxLength: 2_000_000 } },
+        },
+        response: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['html'],
+          properties: { html: { type: 'string' } },
+        },
+      }),
+    },
+    async (request, reply) => {
+      const current = requireSession(request);
+      const csrfHeader = request.headers['x-csrf-token'];
+      auth.verifyCsrf(current.csrfToken, Array.isArray(csrfHeader) ? csrfHeader[0] : csrfHeader);
+      const body = request.body as { markdown: string };
+      return reply.send({ html: renderMarkdown(body.markdown) });
+    },
+  );
 
   app.get('/login', async (request, reply) => {
     return reply.type('text/html').send(
@@ -1635,6 +1758,19 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
       user: current.user,
       csrf: current.csrfToken,
       settings: runtimeSettings.load(),
+      trustedSigners: database
+        .prepare(
+          `SELECT fingerprint, identity, key_type AS keyType, created_at AS createdAt
+        FROM trusted_signers WHERE revoked_at IS NULL ORDER BY identity`,
+        )
+        .all(),
+      backupDestinations: database
+        .prepare(
+          `SELECT name,endpoint,region,bucket,
+        object_prefix AS objectPrefix,last_success_at AS lastSuccessAt,last_error AS lastError
+        FROM backup_destinations ORDER BY name`,
+        )
+        .all(),
       providers: {
         oidc:
           config.authentication?.oidc.map((provider) => ({
@@ -1669,6 +1805,31 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
     const current = requireAdministrator(request);
     const body = request.body as FormBody;
     auth.verifyCsrf(current.csrfToken, body.csrf);
+    if (body.action === 'trustedSigner') {
+      enhancements.addTrustedSigner(current.user.id, {
+        fingerprint: body.fingerprint ?? '',
+        identity: body.identity ?? '',
+        keyType: body.keyType === 'ssh' ? 'ssh' : 'openpgp',
+        publicKey: body.publicKey ?? '',
+      });
+      return await reply.redirect('/admin/settings');
+    }
+    if (body.action === 'revokeTrustedSigner') {
+      enhancements.revokeTrustedSigner(current.user.id, body.fingerprint ?? '');
+      return await reply.redirect('/admin/settings');
+    }
+    if (body.action === 'backupDestination') {
+      new BackupDestinationService(database, config).save(current.user.id, {
+        name: body.name ?? '',
+        endpoint: body.endpoint ?? '',
+        region: body.region ?? '',
+        bucket: body.bucket ?? '',
+        prefix: body.prefix ?? '',
+        accessKey: body.accessKey ?? '',
+        secretKey: body.secretKey ?? '',
+      });
+      return await reply.redirect('/admin/settings');
+    }
     const number = (key: string) => Number(body[key]);
     runtimeSettings.update(current.user.id, {
       registrationMode:
@@ -1924,6 +2085,9 @@ addEventListener('message', async (event) => {
         groups: groups
           .listForUser(current.user.id)
           .filter((group) => group.role === 'owner' || group.role === 'manager'),
+        templates: repositories
+          .listAccessible(current.user.id, 1, 100)
+          .filter((repository) => enhancements.isTemplate(repository.id)),
       }),
     );
   });
@@ -1932,6 +2096,7 @@ addEventListener('message', async (event) => {
     const body = request.body as FormBody;
     auth.verifyCsrf(current.csrfToken, body.csrf);
     const visibility: Visibility = body.visibility === 'public' ? 'public' : 'private';
+    let createdRepository: ReturnType<RepositoryService['getById']> | null = null;
     try {
       const [ownerType, ownerSlug] = (body.owner ?? '').split(':', 2);
       const repository =
@@ -1956,9 +2121,26 @@ addEventListener('message', async (event) => {
               gitignore: body.gitignore ?? '',
               license: body.license ?? '',
             });
+      createdRepository = repository;
+      if (body.templateId) {
+        const template = repositories.getById(Number.parseInt(body.templateId, 10));
+        repositories.require(template, current.user.id, 'read');
+        if (!enhancements.isTemplate(template.id))
+          throw new ValidationError('Template repository is unavailable');
+        await repositories.populateFromTemplate(repository, template);
+        enhancements.recordActivity(
+          repository.id,
+          current.user.id,
+          'repository.createdFromTemplate',
+          undefined,
+          { templateId: template.id },
+        );
+      }
       search.enqueue(repository.id);
       return await reply.redirect(`/${repository.ownerSlug}/${repository.slug}`);
     } catch (error) {
+      if (createdRepository && body.templateId)
+        await repositories.discardFailedCreation(createdRepository).catch(() => undefined);
       return reply
         .code((error as { statusCode?: number }).statusCode ?? 400)
         .type('text/html')
@@ -1970,6 +2152,9 @@ addEventListener('message', async (event) => {
             groups: groups
               .listForUser(current.user.id)
               .filter((group) => group.role === 'owner' || group.role === 'manager'),
+            templates: repositories
+              .listAccessible(current.user.id, 1, 100)
+              .filter((repository) => enhancements.isTemplate(repository.id)),
           }),
         );
     }
@@ -1981,6 +2166,7 @@ addEventListener('message', async (event) => {
     if (!repository) throw new NotFoundError();
     const current = session(request);
     repositories.require(repository, current?.user.id ?? null, 'read');
+    if (current) enhancements.touchRecent(current.user.id, repository.id);
     return { repository, current };
   };
 
@@ -2163,8 +2349,32 @@ addEventListener('message', async (event) => {
         csrf: current.csrfToken,
         repository,
         grants: repositoryAdmin.grants(repository, current.user.id),
+        policies: enhancements.policies(repository.id),
+        deployKeys: enhancements.deployKeys(repository.id),
+        isTemplate: enhancements.isTemplate(repository.id),
+        mirror: enhancements.mirror(repository.id),
       }),
     );
+  });
+
+  app.get('/:owner/:repository/activity', async (request, reply) => {
+    const { repository, current } = readableRepository(request);
+    return reply.type('text/html').send(
+      await render('repository-activity', {
+        user: current?.user ?? null,
+        repository,
+        events: enhancements.activity(repository.id),
+      }),
+    );
+  });
+
+  app.post('/:owner/:repository/pin', async (request, reply) => {
+    const { repository, current } = readableRepository(request);
+    if (!current) throw new AuthorizationError();
+    const body = request.body as FormBody;
+    auth.verifyCsrf(current.csrfToken, body.csrf);
+    enhancements.pin(current.user.id, repository.id, body.enabled === 'yes');
+    return await reply.redirect(`/${repository.ownerSlug}/${repository.slug}`);
   });
 
   app.post('/:owner/:repository/settings', async (request, reply) => {
@@ -2202,6 +2412,41 @@ addEventListener('message', async (event) => {
         body.principalType === 'group' ? 'group' : 'user',
         Number.parseInt(body.principalId ?? '', 10),
       );
+    } else if (body.action === 'policy') {
+      await enhancements.setPolicy(repository, current.user.id, {
+        refPattern: body.refPattern ?? '',
+        blockForcePush: body.blockForcePush === 'on',
+        blockDeletion: body.blockDeletion === 'on',
+        requireSignedCommits: body.requireSignedCommits === 'on',
+        commitMessagePrefix: body.commitMessagePrefix ?? null,
+      });
+    } else if (body.action === 'removePolicy') {
+      await enhancements.removePolicy(repository, current.user.id, body.refPattern ?? '');
+    } else if (body.action === 'deployKey') {
+      await enhancements.addDeployKey(
+        repository,
+        current.user.id,
+        body.name ?? '',
+        body.publicKey ?? '',
+      );
+    } else if (body.action === 'removeDeployKey') {
+      enhancements.removeDeployKey(
+        repository,
+        current.user.id,
+        Number.parseInt(body.keyId ?? '', 10),
+      );
+    } else if (body.action === 'template') {
+      enhancements.setTemplate(repository, current.user.id, body.enabled === 'on');
+    } else if (body.action === 'mirror') {
+      enhancements.configureMirror(repository, current.user.id, {
+        direction: body.direction === 'push' ? 'push' : 'pull',
+        remoteUrl: body.remoteUrl ?? '',
+        intervalMinutes: Number.parseInt(body.intervalMinutes ?? '60', 10),
+      });
+    } else if (body.action === 'runMirror') {
+      await enhancements.runMirror(repository, current.user.id);
+    } else if (body.action === 'removeMirror') {
+      enhancements.removeMirror(repository, current.user.id);
     } else if (body.action === 'rename') {
       updated = repositoryAdmin.rename(repository, current.user.id, body.slug ?? '');
     } else if (body.action === 'transfer') {
@@ -2332,18 +2577,31 @@ addEventListener('message', async (event) => {
     auth.verifyCsrf(current.csrfToken, body.csrf);
     const branch = body.branch ?? repository.defaultBranch;
     const deleting = body.action === 'delete';
-    await mutations.commitFile({
-      repository,
-      actorUserId: current.user.id,
-      branch,
-      filePath: parameters['*'],
-      ...(deleting ? {} : { content: Buffer.from(body.content ?? '', 'utf8') }),
-      message: body.message ?? '',
-    });
+    const requestedPath = body.path ?? parameters['*'];
+    if (!deleting && requestedPath !== parameters['*']) {
+      await mutations.commitFiles({
+        repository,
+        actorUserId: current.user.id,
+        branch,
+        files: [
+          { path: parameters['*'] },
+          { path: requestedPath, content: Buffer.from(body.content ?? '', 'utf8') },
+        ],
+        message: body.message ?? '',
+      });
+    } else
+      await mutations.commitFile({
+        repository,
+        actorUserId: current.user.id,
+        branch,
+        filePath: parameters['*'],
+        ...(deleting ? {} : { content: Buffer.from(body.content ?? '', 'utf8') }),
+        message: body.message ?? '',
+      });
     if (deleting) {
       return await reply.redirect(`/${repository.ownerSlug}/${repository.slug}`);
     }
-    const encodedPath = parameters['*'].split('/').map(encodeURIComponent).join('/');
+    const encodedPath = requestedPath.split('/').map(encodeURIComponent).join('/');
     return await reply.redirect(
       `/${repository.ownerSlug}/${repository.slug}/blob/${encodedPath}?ref=${encodeURIComponent(branch)}`,
     );
@@ -2454,6 +2712,8 @@ addEventListener('message', async (event) => {
         canAdmin:
           current !== null &&
           ['admin', 'owner'].includes(repositories.permission(repository, current.user.id)),
+        csrf: current?.csrfToken ?? '',
+        pinned: current ? enhancements.pinnedIds(current.user.id).includes(repository.id) : false,
       }),
     );
   });
@@ -2535,6 +2795,11 @@ addEventListener('message', async (event) => {
         byteLimit: Math.min(2 * 1024 * 1024, config.limits.diffBytes),
       }),
     );
+    const trustedIdentity = enhancements.trustedIdentity(commit.signature.fingerprint);
+    if (trustedIdentity && commit.signature.state === 'valid') {
+      commit.signature.identityTrusted = true;
+      commit.signature.label = `Valid signature · trusted as ${trustedIdentity}`;
+    }
     const diffFiles = [];
     for (const [index, file] of commit.diffFiles.entries()) {
       if (
@@ -2674,10 +2939,25 @@ addEventListener('message', async (event) => {
 
   app.get('/:owner/:repository/tags', async (request, reply) => {
     const { repository, current } = readableRepository(request);
-    const refs = (await browser.tags(repository)).map((ref) => ({
-      ...ref,
-      relativeDate: relativeDate(ref.committedAt),
-    }));
+    const refs = (await browser.tags(repository)).map((ref) => {
+      const trustedIdentity = enhancements.trustedIdentity(ref.signature?.fingerprint);
+      return {
+        ...ref,
+        ...(ref.signature && trustedIdentity
+          ? {
+              signature: {
+                ...ref.signature,
+                identityTrusted: ref.signature.state === 'valid',
+                label:
+                  ref.signature.state === 'valid'
+                    ? `Valid signature · trusted as ${trustedIdentity}`
+                    : ref.signature.label,
+              },
+            }
+          : {}),
+        relativeDate: relativeDate(ref.committedAt),
+      };
+    });
     const canWrite =
       current !== null &&
       !['none', 'read'].includes(repositories.permission(repository, current.user.id));
@@ -2900,6 +3180,7 @@ addEventListener('message', async (event) => {
     if (levels[permission] < (write ? 2 : 1)) return gitAuthenticationRequired(reply);
     if (write && repository.storageKind === 'working_tree')
       return reply.code(403).send('Working-tree repositories are browse-only.');
+    if (write) enhancements.assertTransportWritable(repository.id);
     await serveSmartHttp(
       config,
       await repositories.storagePath(repository),
@@ -2926,6 +3207,7 @@ addEventListener('message', async (event) => {
     if (levels[permission] < (write ? 2 : 1)) return gitAuthenticationRequired(reply);
     if (write && repository.storageKind === 'working_tree')
       return reply.code(403).send('Working-tree repositories are browse-only.');
+    if (write) enhancements.assertTransportWritable(repository.id);
     await serveSmartHttp(
       config,
       await repositories.storagePath(repository),
@@ -2945,6 +3227,7 @@ addEventListener('message', async (event) => {
     );
     if (write) {
       search.enqueue(repository.id);
+      enhancements.recordActivity(repository.id, principal?.userId ?? null, 'repository.pushed');
       pluginEvents.publish('repository.pushed', {
         repositoryId: repository.id,
         owner: repository.ownerSlug,
@@ -3343,6 +3626,284 @@ addEventListener('message', async (event) => {
         principalId,
       );
       return reply.code(204).send();
+    },
+  );
+
+  app.get(
+    '/api/v1/repositories/:owner/:repository/activity',
+    {
+      schema: apiContract('repositories', {
+        authenticated: false,
+        params: repositoryParameters,
+        response: enhancementListResponse,
+      }),
+    },
+    async (request, reply) => {
+      const { repository } = apiRepository(request, 'repository:read', 'read');
+      return reply.send({ items: enhancements.activity(repository.id) });
+    },
+  );
+
+  app.get(
+    '/api/v1/repositories/:owner/:repository/policies',
+    {
+      schema: apiContract('repositories', {
+        params: repositoryParameters,
+        response: enhancementListResponse,
+      }),
+    },
+    async (request, reply) => {
+      const { repository } = apiRepository(request, 'repository:read', 'read');
+      return reply.send({ items: enhancements.policies(repository.id) });
+    },
+  );
+
+  app.put(
+    '/api/v1/repositories/:owner/:repository/policies',
+    {
+      schema: apiContract('repositories', {
+        params: repositoryParameters,
+        response: enhancementListResponse,
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['refPattern'],
+          properties: {
+            refPattern: { type: 'string' },
+            blockForcePush: { type: 'boolean' },
+            blockDeletion: { type: 'boolean' },
+            requireSignedCommits: { type: 'boolean' },
+            commitMessagePrefix: { type: ['string', 'null'] },
+          },
+        },
+      }),
+    },
+    async (request, reply) => {
+      const { repository, principal } = apiRepository(request, 'repository:write', 'write');
+      if (!principal) throw new AuthorizationError();
+      const body = request.body as {
+        refPattern: string;
+        blockForcePush?: boolean;
+        blockDeletion?: boolean;
+        requireSignedCommits?: boolean;
+        commitMessagePrefix?: string | null;
+      };
+      await enhancements.setPolicy(repository, principal.userId, {
+        refPattern: body.refPattern,
+        blockForcePush: body.blockForcePush ?? true,
+        blockDeletion: body.blockDeletion ?? true,
+        requireSignedCommits: body.requireSignedCommits ?? false,
+        commitMessagePrefix: body.commitMessagePrefix ?? null,
+      });
+      return reply.send({ items: enhancements.policies(repository.id) });
+    },
+  );
+
+  app.get(
+    '/api/v1/repositories/:owner/:repository/deploy-keys',
+    {
+      schema: apiContract('repositories', {
+        params: repositoryParameters,
+        response: enhancementListResponse,
+      }),
+    },
+    async (request, reply) => {
+      const { repository, principal } = apiRepository(request, 'repository:read', 'read');
+      if (!principal) throw new AuthorizationError();
+      repositories.require(repository, principal.userId, 'admin');
+      return reply.send({ items: enhancements.deployKeys(repository.id) });
+    },
+  );
+
+  app.post(
+    '/api/v1/repositories/:owner/:repository/deploy-keys',
+    {
+      schema: apiContract('repositories', {
+        success: 201,
+        response: enhancementMutationResponse,
+        params: repositoryParameters,
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['name', 'publicKey'],
+          properties: { name: { type: 'string' }, publicKey: { type: 'string' } },
+        },
+      }),
+    },
+    async (request, reply) => {
+      const { repository, principal } = apiRepository(request, 'repository:write', 'write');
+      if (!principal) throw new AuthorizationError();
+      const body = request.body as { name: string; publicKey: string };
+      const id = await enhancements.addDeployKey(
+        repository,
+        principal.userId,
+        body.name,
+        body.publicKey,
+      );
+      return reply.code(201).send({ id });
+    },
+  );
+
+  app.get(
+    '/api/v1/repositories/:owner/:repository/mirror',
+    {
+      schema: apiContract('repositories', {
+        params: repositoryParameters,
+        response: mirrorResponse,
+      }),
+    },
+    async (request, reply) => {
+      const { repository, principal } = apiRepository(request, 'repository:read', 'read');
+      if (!principal) throw new AuthorizationError();
+      repositories.require(repository, principal.userId, 'admin');
+      return reply.send({ mirror: enhancements.mirror(repository.id) ?? null });
+    },
+  );
+
+  app.put(
+    '/api/v1/repositories/:owner/:repository/mirror',
+    {
+      schema: apiContract('repositories', {
+        params: repositoryParameters,
+        response: mirrorResponse,
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['direction', 'remoteUrl', 'intervalMinutes'],
+          properties: {
+            direction: { type: 'string', enum: ['pull', 'push'] },
+            remoteUrl: { type: 'string' },
+            intervalMinutes: { type: 'integer', minimum: 5, maximum: 10080 },
+          },
+        },
+      }),
+    },
+    async (request, reply) => {
+      const { repository, principal } = apiRepository(request, 'repository:write', 'write');
+      if (!principal) throw new AuthorizationError();
+      enhancements.configureMirror(
+        repository,
+        principal.userId,
+        request.body as { direction: 'pull' | 'push'; remoteUrl: string; intervalMinutes: number },
+      );
+      return reply.send({ mirror: enhancements.mirror(repository.id) });
+    },
+  );
+
+  app.put(
+    '/api/v1/repositories/:owner/:repository/pin',
+    {
+      schema: apiContract('repositories', {
+        params: repositoryParameters,
+        response: enhancementMutationResponse,
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['pinned'],
+          properties: { pinned: { type: 'boolean' } },
+        },
+      }),
+    },
+    async (request, reply) => {
+      const { repository, principal } = apiRepository(request, 'repository:read', 'read');
+      if (!principal) throw new AuthorizationError();
+      enhancements.pin(
+        principal.userId,
+        repository.id,
+        (request.body as { pinned: boolean }).pinned,
+      );
+      return reply.send({ pinned: (request.body as { pinned: boolean }).pinned });
+    },
+  );
+
+  app.delete(
+    '/api/v1/repositories/:owner/:repository/policies',
+    {
+      schema: apiContract('repositories', {
+        success: 204,
+        params: repositoryParameters,
+        response: enhancementMutationResponse,
+        query: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['refPattern'],
+          properties: { refPattern: { type: 'string' } },
+        },
+      }),
+    },
+    async (request, reply) => {
+      const { repository, principal } = apiRepository(request, 'repository:write', 'write');
+      if (!principal) throw new AuthorizationError();
+      await enhancements.removePolicy(
+        repository,
+        principal.userId,
+        (request.query as { refPattern: string }).refPattern,
+      );
+      return reply.code(204).send();
+    },
+  );
+
+  app.delete(
+    '/api/v1/repositories/:owner/:repository/deploy-keys/:keyId',
+    {
+      schema: apiContract('repositories', {
+        success: 204,
+        params: {
+          type: 'object',
+          required: ['owner', 'repository', 'keyId'],
+          properties: {
+            owner: { type: 'string' },
+            repository: { type: 'string' },
+            keyId: { type: 'integer', minimum: 1 },
+          },
+        },
+      }),
+    },
+    async (request, reply) => {
+      const { repository, principal } = apiRepository(request, 'repository:write', 'write');
+      if (!principal) throw new AuthorizationError();
+      enhancements.removeDeployKey(
+        repository,
+        principal.userId,
+        Number((request.params as { keyId: string }).keyId),
+      );
+      return reply.code(204).send();
+    },
+  );
+
+  app.delete(
+    '/api/v1/repositories/:owner/:repository/mirror',
+    {
+      schema: apiContract('repositories', { success: 204, params: repositoryParameters }),
+    },
+    async (request, reply) => {
+      const { repository, principal } = apiRepository(request, 'repository:write', 'write');
+      if (!principal) throw new AuthorizationError();
+      enhancements.removeMirror(repository, principal.userId);
+      return reply.code(204).send();
+    },
+  );
+
+  app.put(
+    '/api/v1/repositories/:owner/:repository/template',
+    {
+      schema: apiContract('repositories', {
+        params: repositoryParameters,
+        response: enhancementMutationResponse,
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['enabled'],
+          properties: { enabled: { type: 'boolean' } },
+        },
+      }),
+    },
+    async (request, reply) => {
+      const { repository, principal } = apiRepository(request, 'repository:write', 'write');
+      if (!principal) throw new AuthorizationError();
+      const enabled = (request.body as { enabled: boolean }).enabled;
+      enhancements.setTemplate(repository, principal.userId, enabled);
+      return reply.send({ enabled });
     },
   );
 
@@ -4223,6 +4784,128 @@ addEventListener('message', async (event) => {
     async (request, reply) => {
       requireAdminPrincipal(request);
       return reply.send(runtimeSettings.load());
+    },
+  );
+
+  app.get(
+    '/api/v1/administration/trusted-signers',
+    {
+      schema: apiContract('administration', { response: enhancementListResponse }),
+    },
+    async (request, reply) => {
+      requireAdminPrincipal(request);
+      return reply.send({
+        items: database
+          .prepare(
+            `SELECT fingerprint,identity,key_type AS keyType,created_at AS createdAt FROM trusted_signers WHERE revoked_at IS NULL ORDER BY identity`,
+          )
+          .all(),
+      });
+    },
+  );
+
+  app.post(
+    '/api/v1/administration/trusted-signers',
+    {
+      schema: apiContract('administration', {
+        success: 201,
+        response: enhancementMutationResponse,
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['fingerprint', 'identity', 'keyType'],
+          properties: {
+            fingerprint: { type: 'string' },
+            identity: { type: 'string' },
+            keyType: { type: 'string', enum: ['openpgp', 'ssh'] },
+            publicKey: { type: 'string' },
+          },
+        },
+      }),
+    },
+    async (request, reply) => {
+      const principal = requireAdminPrincipal(request);
+      enhancements.addTrustedSigner(
+        principal.userId,
+        request.body as {
+          fingerprint: string;
+          identity: string;
+          keyType: 'openpgp' | 'ssh';
+          publicKey?: string;
+        },
+      );
+      return reply.code(201).send({ created: true });
+    },
+  );
+
+  app.delete(
+    '/api/v1/administration/trusted-signers/:fingerprint',
+    {
+      schema: apiContract('administration', {
+        success: 204,
+        params: {
+          type: 'object',
+          required: ['fingerprint'],
+          properties: { fingerprint: { type: 'string' } },
+        },
+      }),
+    },
+    async (request, reply) => {
+      const principal = requireAdminPrincipal(request);
+      enhancements.revokeTrustedSigner(
+        principal.userId,
+        (request.params as { fingerprint: string }).fingerprint,
+      );
+      return reply.code(204).send();
+    },
+  );
+
+  app.get(
+    '/api/v1/administration/backup-destinations',
+    { schema: apiContract('administration', { response: enhancementListResponse }) },
+    async (request, reply) => {
+      requireAdminPrincipal(request);
+      return reply.send({ items: new BackupDestinationService(database, config).list() });
+    },
+  );
+
+  app.post(
+    '/api/v1/administration/backup-destinations',
+    {
+      schema: apiContract('administration', {
+        success: 201,
+        response: enhancementMutationResponse,
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['name', 'endpoint', 'region', 'bucket', 'accessKey', 'secretKey'],
+          properties: {
+            name: { type: 'string' },
+            endpoint: { type: 'string' },
+            region: { type: 'string' },
+            bucket: { type: 'string' },
+            prefix: { type: 'string' },
+            accessKey: { type: 'string' },
+            secretKey: { type: 'string' },
+          },
+        },
+      }),
+    },
+    async (request, reply) => {
+      const principal = requireAdminPrincipal(request);
+      new BackupDestinationService(database, config).save(principal.userId, {
+        ...(request.body as {
+          name: string;
+          endpoint: string;
+          region: string;
+          bucket: string;
+          prefix?: string;
+          accessKey: string;
+          secretKey: string;
+        }),
+        prefix: (request.body as { prefix?: string }).prefix ?? '',
+      });
+      return reply.code(201).send({ created: true });
     },
   );
 

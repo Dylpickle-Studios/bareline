@@ -97,7 +97,7 @@ export class SshKeyService {
   }
 }
 
-async function inspectKey(
+export async function inspectKey(
   publicKey: string,
 ): Promise<{ bits: number; fingerprint: string; type: string }> {
   return await new Promise((resolve, reject) => {

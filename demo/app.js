@@ -5,6 +5,13 @@ const seed = {
   file: null,
   branches: ['main', 'feature/reading-mode'],
   tags: ['v0.1.0'],
+  pinned: true,
+  policies: [{ ref: 'main', forcePush: false, deletion: false, prefix: 'PT-' }],
+  activity: [
+    { action: 'repository.pushed', detail: 'main', time: '2 hours ago' },
+    { action: 'branch.created', detail: 'feature/reading-mode', time: 'Yesterday' },
+    { action: 'repository.createdFromTemplate', detail: 'minimal-docs', time: '3 days ago' },
+  ],
   files: {
     'README.md':
       '# Paper Trail\n\nA small, durable record of decisions.\n\n## Principles\n\n- Keep the work visible.\n- Prefer durable tools.\n',
@@ -149,6 +156,9 @@ function showCompare() {
   const commit = latest();
   app.innerHTML = `<div class="bar"><label>Base <select><option>main</option></select></label><label>Compare <select><option>${escape(state.branch)}</option></select></label></div><section class="card"><header><span>${escape(commit.file)} · ${commit.id}</span><span class="stats"><b class="add">+${commit.after.split('\n').length - 1}</b> <b class="del">−${commit.before.split('\n').length - 1}</b></span></header><ul class="diff">${diffs(commit.before, commit.after)}</ul></section>`;
 }
+function showActivity() {
+  app.innerHTML = `<div class="bar"><strong>Repository activity</strong><small>Git-focused events</small></div><ul class="list">${state.activity.map((event) => `<li class="row"><span><strong>${escape(event.action)}</strong><br><small>Alice Nguyen · ${escape(event.detail)}</small></span><small>${escape(event.time)}</small></li>`).join('')}</ul>`;
+}
 function render() {
   document
     .querySelectorAll('[data-view]')
@@ -157,6 +167,7 @@ function render() {
   if (state.view === 'commits') showCommits();
   if (state.view === 'branches' || state.view === 'tags') showRefs(state.view);
   if (state.view === 'compare') showCompare();
+  if (state.view === 'activity') showActivity();
   document.querySelector('#back')?.addEventListener('click', () => {
     state.file = null;
     render();
@@ -167,14 +178,22 @@ function editor(file = '') {
   const current = state.files[file] || '';
   openModal(
     file ? 'Edit file' : 'Create file',
-    `<label>Path<input id="path" value="${escape(file)}" placeholder="notes/today.md"></label><label>Contents<textarea id="contents">${escape(current)}</textarea></label><label>Commit message<input id="message" value="${escape(file ? `Update ${file}` : 'Add file')}"></label><div class="modal-actions"><button value="cancel">Cancel</button><button class="primary" type="button" id="commit">Commit changes</button></div>`,
+    `<label>Path<input id="path" value="${escape(file)}" placeholder="notes/today.md"></label><label>Contents<textarea id="contents">${escape(current)}</textarea></label><details open><summary>Markdown preview</summary><article class="markdown" id="editor-preview"></article></details><label>Commit message<input id="message" value="${escape(file ? `Update ${file}` : 'Add file')}"></label><div class="modal-actions"><button value="cancel">Cancel</button><button class="primary" type="button" id="commit">Commit changes</button></div>`,
   );
+  const preview = document.querySelector('#editor-preview');
+  const contentsEditor = document.querySelector('#contents');
+  const updatePreview = () => {
+    preview.textContent = contentsEditor.value;
+  };
+  contentsEditor.oninput = updatePreview;
+  updatePreview();
   document.querySelector('#commit').onclick = () => {
     const path = document.querySelector('#path').value.trim();
     const contents = document.querySelector('#contents').value;
     const message = document.querySelector('#message').value.trim();
     if (!path || !message) return;
-    const before = state.files[path] || '';
+    const before = current;
+    if (file && file !== path) delete state.files[file];
     state.files[path] = contents;
     state.commits.unshift({
       id: Math.random().toString(16).slice(2, 9),
@@ -302,6 +321,17 @@ document.querySelector('#clone').onclick = () =>
   openModal(
     'Clone paper-trail',
     '<label>HTTPS<input readonly value="https://demo.bareline.dev/alice/paper-trail.git"></label><label>SSH<input readonly value="git@demo.bareline.dev:alice/paper-trail.git"></label>',
+  );
+document.querySelector('#pin').onclick = () => {
+  state.pinned = !state.pinned;
+  save();
+  document.querySelector('#pin').textContent = state.pinned ? 'Unpin' : 'Pin';
+};
+document.querySelector('#pin').textContent = state.pinned ? 'Unpin' : 'Pin';
+document.querySelector('#settings').onclick = () =>
+  openModal(
+    'Repository settings',
+    '<h3>Protected branches</h3><p><strong>main</strong> · force pushes blocked · deletion blocked · message prefix <code>PT-</code></p><h3>Deploy keys</h3><p>docs-deploy · read-only</p><h3>Mirror</h3><p>Pull mirror · every 60 minutes · healthy</p><h3>Template repository</h3><label><input type="checkbox" checked> Available as a template</label>',
   );
 document.querySelector('#theme').onclick = () => document.documentElement.classList.toggle('dark');
 document.querySelectorAll('[data-global]').forEach((button) => {

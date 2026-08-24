@@ -15,6 +15,10 @@ database:
   path: ./data/app.db
 git:
   executable: git
+
+# Exact hostnames allowed for repository mirrors. Empty disables remote mirrors.
+mirrors:
+  allowedHosts: []
   timeoutMs: 15000
 search:
   # Empty indexes only each repository's configured default branch.

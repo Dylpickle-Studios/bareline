@@ -8,6 +8,7 @@ import { AuditService } from '../audit/audit-service.js';
 import { AdminService } from '../admin/admin-service.js';
 import { AuthService } from '../auth/auth-service.js';
 import { BackupService } from '../backup/backup-service.js';
+import { BackupDestinationService } from '../backup/backup-destination-service.js';
 import { TokenService } from '../auth/token-service.js';
 import { loadConfig } from '../config/config.js';
 import { openDatabase } from '../database/database.js';
@@ -19,8 +20,14 @@ import { PluginEventService } from '../plugins/event-service.js';
 import { validatePluginManifest } from '../plugins/manifest.js';
 import { SandboxRuntime } from '../plugins/sandbox-runtime.js';
 import { RepositoryService } from '../repositories/repository-service.js';
+import { RepositoryEnhancementService } from '../repositories/repository-enhancement-service.js';
 import { SearchService } from '../search/search-service.js';
-import { authorizeSshCommand, authorizedKeys, executeSshCommand } from '../ssh/forced-command.js';
+import {
+  authorizeDeployKeyCommand,
+  authorizeSshCommand,
+  authorizedKeys,
+  executeSshCommand,
+} from '../ssh/forced-command.js';
 import YAML from 'yaml';
 
 const arguments_ = process.argv.slice(2);
@@ -192,6 +199,57 @@ if (command === 'version') {
     );
   }
   database.close();
+} else if (command === 'backup' && arguments_[1] === 'destination-add') {
+  const config = loadConfig(configFile);
+  const database = openDatabase(config.database.path);
+  new BackupDestinationService(database, config).save(
+    Number.parseInt(requiredValue('--actor-id'), 10),
+    {
+      name: requiredValue('--name'),
+      endpoint: requiredValue('--endpoint'),
+      region: requiredValue('--region'),
+      bucket: requiredValue('--bucket'),
+      prefix: valueAfter('--prefix') ?? '',
+      accessKey: process.env.BARELINE_BACKUP_ACCESS_KEY ?? '',
+      secretKey: process.env.BARELINE_BACKUP_SECRET_KEY ?? '',
+    },
+  );
+  database.close();
+  process.stdout.write('Encrypted S3-compatible backup destination saved.\n');
+} else if (command === 'backup' && arguments_[1] === 'destination-list') {
+  const config = loadConfig(configFile);
+  const database = openDatabase(config.database.path);
+  for (const destination of new BackupDestinationService(database, config).list() as {
+    id: number;
+    name: string;
+    endpoint: string;
+  }[])
+    process.stdout.write(
+      `${String(destination.id)}\t${destination.name}\t${destination.endpoint}\n`,
+    );
+  database.close();
+} else if (command === 'backup' && arguments_[1] === 'upload') {
+  const config = loadConfig(configFile);
+  const database = openDatabase(config.database.path);
+  const source = resolve(requiredValue('--file'));
+  const encryptedOutput = valueAfter('--encrypted-output');
+  let uploadSource = source;
+  let objectName = requiredValue('--object-name');
+  if (encryptedOutput) {
+    const encryptionKey = process.env.BARELINE_BACKUP_ENCRYPTION_KEY;
+    if (!encryptionKey)
+      throw new Error('BARELINE_BACKUP_ENCRYPTION_KEY is required with --encrypted-output');
+    uploadSource = resolve(encryptedOutput);
+    await BackupDestinationService.encryptFile(source, uploadSource, encryptionKey);
+    objectName += '.bareline-encrypted';
+  }
+  await new BackupDestinationService(database, config).upload(
+    Number.parseInt(requiredValue('--destination-id'), 10),
+    uploadSource,
+    objectName,
+  );
+  database.close();
+  process.stdout.write('Backup uploaded.\n');
 } else if (command === 'backup') {
   const config = loadConfig(configFile);
   const output = valueAfter('--output');
@@ -215,6 +273,27 @@ if (command === 'version') {
   const input = requiredValue('--input');
   const manifest = await BackupService.verify(input);
   process.stdout.write(`Backup is valid (${String(Object.keys(manifest.files).length)} files).\n`);
+} else if (command === 'repo' && arguments_[1] === 'mirrors-run') {
+  const config = loadConfig(configFile);
+  const database = openDatabase(config.database.path);
+  const audit = new AuditService(database);
+  const git = new GitRunner(
+    config.git.executable,
+    config.git.timeoutMs,
+    config.limits.gitOutputBytes,
+  );
+  const repositories = new RepositoryService(database, git, config, audit);
+  const result = await new RepositoryEnhancementService(
+    database,
+    git,
+    repositories,
+    audit,
+    config.mirrors?.allowedHosts ?? [],
+  ).runDueMirrors();
+  database.close();
+  process.stdout.write(
+    `Mirror runs: ${String(result.attempted)}, failed: ${String(result.failed)}.\n`,
+  );
 } else if (command === 'ssh' && arguments_[1] === 'authorized-keys') {
   const config = loadConfig(configFile);
   if (!config.ssh.enabled) throw new Error('SSH transport is disabled');
@@ -245,9 +324,14 @@ if (command === 'version') {
 } else if (command === 'ssh' && arguments_[1] === 'serve') {
   const config = loadConfig(configFile);
   if (!config.ssh.enabled) throw new Error('SSH transport is disabled');
+  const deployKeyId = Number.parseInt(valueAfter('--deploy-key-id') ?? '', 10);
   const keyId = Number.parseInt(valueAfter('--key-id') ?? '', 10);
   const originalCommand = process.env.SSH_ORIGINAL_COMMAND;
-  if (!Number.isSafeInteger(keyId) || keyId <= 0 || !originalCommand) {
+  if (
+    ((!Number.isSafeInteger(keyId) || keyId <= 0) &&
+      (!Number.isSafeInteger(deployKeyId) || deployKeyId <= 0)) ||
+    !originalCommand
+  ) {
     throw new Error('Invalid SSH forced-command context');
   }
   const database = openDatabase(config.database.path);
@@ -257,9 +341,18 @@ if (command === 'version') {
     config.limits.gitOutputBytes,
   );
   const repositories = new RepositoryService(database, git, config, new AuditService(database));
-  const authorized = await authorizeSshCommand(database, repositories, keyId, originalCommand);
+  const authorized =
+    Number.isSafeInteger(deployKeyId) && deployKeyId > 0
+      ? await authorizeDeployKeyCommand(database, repositories, deployKeyId, originalCommand)
+      : await authorizeSshCommand(database, repositories, keyId, originalCommand);
   const exitCode = await executeSshCommand(config, authorized);
   if (exitCode === 0 && authorized.operation === 'git-receive-pack') {
+    new RepositoryEnhancementService(
+      database,
+      git,
+      repositories,
+      new AuditService(database),
+    ).recordActivity(authorized.repositoryId, authorized.userId, 'repository.pushed');
     new SearchService(
       database,
       git,
@@ -280,14 +373,19 @@ if (command === 'version') {
       visibility: authorized.visibility,
     });
   }
-  database
-    .prepare('UPDATE ssh_keys SET last_used_at = ? WHERE id = ?')
-    .run(new Date().toISOString(), keyId);
+  if (Number.isSafeInteger(deployKeyId) && deployKeyId > 0)
+    database
+      .prepare('UPDATE repository_deploy_keys SET last_used_at = ? WHERE id = ?')
+      .run(new Date().toISOString(), deployKeyId);
+  else
+    database
+      .prepare('UPDATE ssh_keys SET last_used_at = ? WHERE id = ?')
+      .run(new Date().toISOString(), keyId);
   database.close();
   process.exitCode = exitCode;
 } else {
   process.stderr.write(
-    `Usage: bareline <serve|doctor|version|config check|user create|user promote|user disable|repo import|repo rescan|token create|search status|search rebuild|plugins validate|plugins list|backup|restore|restore-verify|ssh setup|ssh authorized-keys|ssh serve> [options]\n`,
+    `Usage: bareline <serve|doctor|version|config check|user create|user promote|user disable|repo import|repo rescan|repo mirrors-run|token create|search status|search rebuild|plugins validate|plugins list|backup|backup destination-add|backup destination-list|backup upload|restore|restore-verify|ssh setup|ssh authorized-keys|ssh serve> [options]\n`,
   );
   process.exitCode = 2;
 }

@@ -13,5 +13,11 @@ disabled global/system configuration and hooks, cancellation, timeouts, and outp
 operations use the central runner; Smart HTTP, SSH, and archives use streaming adapters with those
 same controls plus the shared repository resolver and authorization service.
 
+Repository enhancements remain metadata around Git rather than alternate representations of Git
+objects. A minute worker processes bounded batches of due mirrors; remote hosts require an explicit
+YAML allowlist. Template creation fetches refs into a fresh opaque bare repository and removes both
+storage and metadata if population fails. Activity stores bounded event summaries, not commits or
+file content. Trusted signer records annotate Git's verification result without changing it.
+
 SQLite is configured for foreign keys and WAL. Migrations are ordered, checksummed, and transactional
 where SQLite permits. One serving process is supported; horizontal multi-writer deployments are not.

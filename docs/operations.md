@@ -30,6 +30,26 @@ with an ordinary file copy while writes continue.
 
 ## Restoring backups
 
+## Encrypted S3-compatible destinations
+
+Bareline can store S3-compatible destination credentials encrypted with `security.masterKey`; raw
+credentials are never accepted as command-line arguments. Set `BARELINE_BACKUP_ACCESS_KEY` and
+`BARELINE_BACKUP_SECRET_KEY`, then run:
+
+```sh
+bareline backup destination-add --actor-id 1 --name offsite \
+  --endpoint https://s3.example.net --region eu-west-1 --bucket bareline --config config.yml
+bareline backup destination-list --config config.yml
+bareline backup upload --destination-id 1 --file /backup/bareline.tar.zst \
+  --object-name bareline-2026-08-24.tar.zst --config config.yml
+```
+
+The upload uses AWS Signature Version 4 and HTTPS. To encrypt a backup archive before upload, set a
+separate 32-byte base64url `BARELINE_BACKUP_ENCRYPTION_KEY` and add
+`--encrypted-output /safe/staging/backup.enc`. Bareline writes a versioned AES-256-GCM envelope and
+uploads that file. Keep this key outside both the Bareline host and destination; losing it makes the
+archive unrecoverable. Endpoint URLs with credentials or non-HTTPS schemes are rejected.
+
 Verify first with `bareline restore-verify --input BACKUP`. Stop the application, then run
 `bareline restore --input BACKUP --confirm-replace`. Restore refuses to proceed without explicit
 confirmation and moves existing data into a timestamped pre-restore directory. Start the server and

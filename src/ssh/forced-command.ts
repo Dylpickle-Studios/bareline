@@ -35,6 +35,15 @@ export async function authorizeSshCommand(
   const operation = match[1] as AuthorizedSshCommand['operation'];
   if (operation === 'git-receive-pack' && repository.storageKind === 'working_tree')
     throw new SshAuthorizationError();
+  if (operation === 'git-receive-pack') {
+    const advancedPolicy = database
+      .prepare(
+        `SELECT 1 FROM repository_policies WHERE repository_id=?
+      AND (require_signed_commits=1 OR commit_message_pattern IS NOT NULL) LIMIT 1`,
+      )
+      .get(repository.id);
+    if (advancedPolicy) throw new SshAuthorizationError();
+  }
   repositories.require(
     repository,
     key.user_id,
@@ -48,6 +57,33 @@ export async function authorizeSshCommand(
     repository: repository.slug,
     visibility: repository.visibility,
     userId: key.user_id,
+  };
+}
+
+export async function authorizeDeployKeyCommand(
+  database: Database,
+  repositories: RepositoryService,
+  keyId: number,
+  originalCommand: string,
+): Promise<AuthorizedSshCommand> {
+  const key = database
+    .prepare('SELECT repository_id FROM repository_deploy_keys WHERE id = ?')
+    .get(keyId) as { repository_id: number } | undefined;
+  const match =
+    /^git-upload-pack '(?<owner>[a-z0-9][a-z0-9-]{0,38})\/(?<repository>[a-z0-9][a-z0-9-]{0,38})\.git'$/.exec(
+      originalCommand,
+    );
+  if (!key || !match?.groups?.owner || !match.groups.repository) throw new SshAuthorizationError();
+  const repository = repositories.find(match.groups.owner, match.groups.repository);
+  if (repository?.id !== key.repository_id) throw new SshAuthorizationError();
+  return {
+    operation: 'git-upload-pack',
+    repositoryPath: await repositories.storagePath(repository),
+    repositoryId: repository.id,
+    owner: repository.ownerSlug,
+    repository: repository.slug,
+    visibility: repository.visibility,
+    userId: 0,
   };
 }
 
@@ -123,12 +159,18 @@ export function authorizedKeys(database: Database, executable: string, configFil
     id: number;
     public_key: string;
   }[];
-  return rows
-    .map(
-      (row) =>
-        `restrict,command="${escapeAuthorizedKeyValue(executable)} ssh serve --key-id ${String(row.id)} --config ${escapeAuthorizedKeyValue(configFile)}" ${row.public_key}`,
-    )
-    .join('\n');
+  const userLines = rows.map(
+    (row) =>
+      `restrict,command="${escapeAuthorizedKeyValue(executable)} ssh serve --key-id ${String(row.id)} --config ${escapeAuthorizedKeyValue(configFile)}" ${row.public_key}`,
+  );
+  const deployRows = database
+    .prepare('SELECT id, public_key FROM repository_deploy_keys ORDER BY id')
+    .all() as { id: number; public_key: string }[];
+  const deployLines = deployRows.map(
+    (row) =>
+      `restrict,command="${escapeAuthorizedKeyValue(executable)} ssh serve --deploy-key-id ${String(row.id)} --config ${escapeAuthorizedKeyValue(configFile)}" ${row.public_key}`,
+  );
+  return [...userLines, ...deployLines].join('\n');
 }
 
 function escapeAuthorizedKeyValue(value: string): string {

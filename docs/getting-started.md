@@ -51,6 +51,11 @@ Verify and copy backups off-host. Restore requires `--confirm-replace`; existing
 to a recoverable pre-restore directory. Filesystem snapshots must capture SQLite and repository
 storage consistently and must not follow untrusted symlinks.
 
+Repository administrators can protect branches, add read-only deploy keys, configure allowlisted
+mirrors, and mark repositories as templates under **Repository settings**. Your home page keeps a
+small permission-filtered list of pinned and recently viewed repositories. The Activity view shows
+Git and repository changes without introducing project-management machinery.
+
 ## Standalone distribution
 
 Release bundles contain Node, compiled application files, native SQLite bindings, licenses, and a

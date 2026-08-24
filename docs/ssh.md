@@ -18,3 +18,12 @@ Bareline relies on the system OpenSSH server and never exposes an application sh
 Generated entries use OpenSSH's `restrict` option and a per-key forced command. The handler accepts
 only `git-upload-pack 'owner/repository.git'` and `git-receive-pack 'owner/repository.git'`, resolves
 the logical name through SQLite, checks the key owner's permission, and invokes Git without a shell.
+
+Repository deploy keys are emitted by the same commands. Their forced command accepts only
+`git-upload-pack` and verifies that the requested repository is exactly the one assigned to the
+key. Deploy keys can never open a shell, push, or read another repository. Regenerate the dedicated
+account's `authorized_keys` after changing user or deploy keys.
+
+Signed-commit and message-prefix branch policies conservatively disable SSH pushes because Bareline
+does not install executable repository hooks. Force-push and deletion controls are enforced through
+Git's receive configuration.
