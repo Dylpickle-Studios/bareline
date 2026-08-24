@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -9,6 +9,12 @@ const run = promisify(execFile);
 const root = await mkdtemp(join(tmpdir(), 'bareline-docker-smoke-'));
 const data = join(root, 'data');
 await mkdir(data, { mode: 0o777 });
+// mkdir's mode is filtered through the CI runner's umask. The bind mount is intentionally an
+// isolated disposable directory, so explicitly make it writable by the image's non-root UID.
+await chmod(data, 0o777);
+if (((await stat(data)).mode & 0o002) === 0) {
+  throw new Error('Docker smoke-test data directory is not writable by the container user');
+}
 await run('docker', ['build', '--tag', 'bareline:smoke', resolve('.')]);
 const { stdout } = await run('docker', [
   'run',
