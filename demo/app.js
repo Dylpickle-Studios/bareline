@@ -310,14 +310,178 @@ function palette() {
   query.oninput = update;
   update();
 }
-function showHome(signedOut = false) {
+function showPage(html) {
   repositoryView.hidden = true;
   homeView.hidden = false;
-  homeView.innerHTML = signedOut
-    ? `<section class="card home-card"><div class="markdown"><h2>You are signed out</h2><p>This demo does not use a server session. Sign back in as Alice to continue exploring its local sample data.</p><button class="primary" id="sign-in">Sign in as Alice</button></div></section>`
-    : `<section class="card home-card"><div class="markdown"><p class="eyebrow">Your home</p><h2>Welcome back, Alice.</h2><p>One repository is ready to browse in this interactive demo.</p></div><ul class="list"><li class="row"><span class="folder">▰</span><button class="name" id="open-repository"><strong>alice / paper-trail</strong><br><small>A small, durable record of decisions.</small></button><small>Public · updated ${latest().time}</small></li></ul></section>`;
+  homeView.innerHTML = html;
+}
+function showHome(signedOut = false) {
+  showPage(
+    signedOut
+      ? `<section class="hero"><p class="eyebrow">Local demonstration</p><h1>You are signed out.</h1><p>This static demo has no server session. Sign back in as Alice to continue with the seeded account.</p><button class="primary" id="sign-in">Sign in as Alice</button></section>`
+      : `<section class="hero"><p class="eyebrow">Git, without the clutter</p><h1>A focused home<br>for your repositories.</h1><p>Browse code, understand history, and move work over SSH or HTTPS—without project-management machinery getting in the way.</p><div class="hero-actions"><button class="primary" id="create-repository">Create repository</button><button id="open-repository">Open paper-trail</button></div></section>`,
+  );
   document.querySelector('#open-repository')?.addEventListener('click', showRepository);
   document.querySelector('#sign-in')?.addEventListener('click', () => showHome());
+  document
+    .querySelector('#create-repository')
+    ?.addEventListener('click', () =>
+      openModal(
+        'Create repository',
+        '<label>Owner<select><option>alice</option><option>paper-trail</option></select></label><label>Name<input value="field-notes"></label><label>Description<input value="Small observations worth keeping."></label><label><input class="inline-check" type="checkbox" checked> Initialize with a README</label><div class="modal-actions"><button value="cancel">Cancel</button><button class="primary" value="cancel">Create repository</button></div>',
+      ),
+    );
+}
+function showExplore() {
+  showPage(
+    `<section class="page-heading"><p class="eyebrow">Explore</p><h1>Repositories you can access</h1><p>Private repositories appear only when your account has permission.</p></section><section class="directory"><button class="directory-item" id="explore-repository"><span><strong>alice/paper-trail</strong><em>A small, durable record of decisions.</em><small>Public</small></span><time>Updated ${latest().time}</time></button><button class="directory-item" data-demo-message="This private group repository is available as seeded demo data."><span><strong>paper-trail/field-guide</strong><em>Shared conventions for clear technical decisions.</em><small>Private · member access</small></span><time>Updated yesterday</time></button></section>`,
+  );
+  document.querySelector('#explore-repository').onclick = showRepository;
+  bindDemoMessages();
+}
+const docs = {
+  start: [
+    'Getting Started',
+    '<h2>Installation</h2><p>Install Node.js 24 LTS and Git, copy <code>config.example.yml</code>, choose persistent storage paths, and start Bareline. The first account becomes the administrator through a transactional bootstrap.</p><h2>Creating and cloning a repository</h2><p>Choose <strong>Create repository</strong>, give it a lowercase name, and optionally initialize a README.</p><pre>git clone git@server:alice/project.git\ncd project\ngit add README.md\ngit commit -m "Initial commit"\ngit push -u origin main</pre><h2>Git basics</h2><p>A commit is an immutable snapshot. A branch is a movable name pointing to a commit; a tag is normally a stable release name.</p>',
+  ],
+  deploy: [
+    'Deployment and TLS',
+    '<h2>Docker</h2><p>Run the non-root container with persistent storage mounted at <code>/var/lib/bareline</code>. Put Caddy, nginx, or Traefik in front and forward the original scheme and address only from a trusted proxy.</p><h2>Backups</h2><p>Backups include an online SQLite snapshot, configuration, plugins, repositories, and LFS data with a checksum manifest.</p>',
+  ],
+  git: [
+    'Git guide',
+    '<h2>Remotes and branches</h2><p>A remote gives a local repository a name for its server location. Fetch downloads changes; pull integrates them; push publishes your commits.</p><h2>Authentication</h2><p>HTTPS uses a personal access token. SSH requires adding your public key in account settings. Never upload your private key.</p>',
+  ],
+  admin: [
+    'Administration',
+    '<h2>Users, groups, and permissions</h2><p>Repository access is centralized into read, write, admin, and owner roles. Private repository names are excluded from responses unless the caller may view them.</p><h2>Operations</h2><p>Use the audit log, search status, storage report, and doctor command to operate an installation.</p>',
+  ],
+  api: [
+    'REST API',
+    '<h2>Versioned HTTP API</h2><p>Endpoints live under <code>/api/v1</code>. Personal access tokens are scoped, expiring, revocable, and shown only once.</p><pre>Authorization: Bearer bl_pat_...</pre><p>Interactive OpenAPI documentation is available from the server at <code>/api/docs</code>.</p>',
+  ],
+  plugins: [
+    'Plugins',
+    '<h2>Capability-based extensions</h2><p>Sandboxed WASM plugins receive only approved capabilities. Trusted Node plugins are server software and require an explicit trust decision.</p><h2>Settings and storage</h2><p>Core renders schema-defined settings and gives plugins isolated, namespaced storage.</p>',
+  ],
+};
+function showDocs(selected = 'start') {
+  const [heading, content] = docs[selected] || docs.start;
+  showPage(
+    `<div class="docs-layout"><aside><h2>Documentation</h2>${Object.entries(docs)
+      .map(
+        ([id, entry]) =>
+          `<button class="${id === selected ? 'selected' : ''}" data-doc="${id}">${entry[0]}</button>`,
+      )
+      .join(
+        '',
+      )}<button data-doc="deploy">Operations and backups</button><button data-doc="plugins">Themes and accessibility</button><button data-doc="admin">Security and threat model</button></aside><article class="doc-article"><h1>${heading}</h1>${content}</article></div>`,
+  );
+  document.querySelectorAll('[data-doc]').forEach((button) => {
+    button.onclick = () => showDocs(button.dataset.doc);
+  });
+}
+function showGroups(create = false) {
+  showPage(
+    `<div class="section-layout"><aside><button class="selected" data-group-view="list">Your groups</button><button data-group-view="create">Create group</button></aside><section class="section-content"><h1>${create ? 'Create group' : 'Your groups'}</h1>${create ? '<form class="panel compact" id="group-form"><label>Group name<input required value="design-notes"></label><label>Display name<input required value="Design Notes"></label><label>Description<textarea>Shared design records and references.</textarea></label><button class="primary">Create group</button></form>' : '<div class="panel-list"><button data-demo-message="Group detail pages manage members and owned repositories."><strong>Paper Trail</strong><span><code>paper-trail</code> · owner</span></button></div>'}</section></div>`,
+  );
+  document.querySelector('[data-group-view="list"]').onclick = () => showGroups(false);
+  document.querySelector('[data-group-view="create"]').onclick = () => showGroups(true);
+  document.querySelector('#group-form')?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    openModal(
+      'Group created',
+      '<p>The demo created <strong>Design Notes</strong> locally. No server data was changed.</p>',
+    );
+  });
+  bindDemoMessages();
+}
+const adminSections = {
+  overview: [
+    'System overview',
+    `<div class="metrics"><div><strong>1</strong><span>Users</span></div><div><strong>1</strong><span>Groups</span></div><div><strong>2</strong><span>Repositories</span></div><div><strong>1</strong><span>Plugins</span></div><div><strong>1</strong><span>Sessions</span></div></div><dl class="system-list"><dt>Application</dt><dd>0.1.0</dd><dt>Node.js</dt><dd>v24 LTS</dd><dt>Git</dt><dd>git version 2.47.3</dd><dt>SQLite</dt><dd>WAL · healthy</dd><dt>Repository storage</dt><dd>Writable · 2 repositories</dd><dt>SSH</dt><dd>Enabled</dd></dl>`,
+  ],
+  users: [
+    'Users',
+    '<div class="panel-list"><button data-demo-message="User administration supports disable, promote, and session revocation."><strong>Alice Nguyen</strong><span><code>alice</code> · Administrator · Active</span></button></div>',
+  ],
+  repos: [
+    'Repositories',
+    '<div class="panel-list"><button id="admin-repository"><strong>alice/paper-trail</strong><span>Public · managed bare repository</span></button><button data-demo-message="Private repositories remain permission-filtered throughout Bareline."><strong>paper-trail/field-guide</strong><span>Private · managed bare repository</span></button></div>',
+  ],
+  plugins: [
+    'Plugins',
+    '<div class="plugin-row"><div><strong>Repository Word Count</strong><p>Enabled · Sandboxed WASM · v1.0.0</p><small><span class="status">✓ Repository contents: Read</span> · ✕ Network · ✕ Filesystem</small></div><div><button data-demo-message="Plugin settings are generated from its manifest schema.">Settings</button> <button data-demo-message="The demo keeps this plugin enabled.">Disable</button></div></div>',
+  ],
+  audit: [
+    'Audit log',
+    '<div class="audit"><p><strong>repository.pushed</strong><span>Alice Nguyen · alice/paper-trail · 2 hours ago</span></p><p><strong>session.login_succeeded</strong><span>Alice Nguyen · today</span></p><p><strong>repository.created</strong><span>Alice Nguyen · alice/paper-trail · 3 days ago</span></p></div>',
+  ],
+  search: [
+    'Search index',
+    '<div class="panel"><p class="status">Healthy</p><p>2 repositories indexed · 14 files · last incremental update 2 hours ago.</p><button data-demo-message="A real installation schedules a bounded background rebuild.">Rebuild index</button></div>',
+  ],
+};
+function showAdmin(selected = 'overview') {
+  const [heading, content] = adminSections[selected] || adminSections.overview;
+  showPage(
+    `<div class="section-layout"><aside><p class="eyebrow">Administration</p>${Object.entries(
+      adminSections,
+    )
+      .map(
+        ([id, entry]) =>
+          `<button class="${id === selected ? 'selected' : ''}" data-admin="${id}">${entry[0] === 'System overview' ? 'Overview' : entry[0]}</button>`,
+      )
+      .join(
+        '',
+      )}</aside><section class="section-content"><h1>${heading}</h1>${content}</section></div>`,
+  );
+  document.querySelectorAll('[data-admin]').forEach((button) => {
+    button.onclick = () => showAdmin(button.dataset.admin);
+  });
+  document.querySelector('#admin-repository')?.addEventListener('click', showRepository);
+  bindDemoMessages();
+}
+function showAccount(selected = 'profile') {
+  const titles = {
+    profile: 'Profile',
+    appearance: 'Appearance',
+    security: 'Sessions and security',
+    keys: 'SSH keys',
+    tokens: 'Personal access tokens',
+  };
+  const content =
+    selected === 'appearance'
+      ? '<div class="panel compact"><label>Theme<select><option>System</option><option>Light</option><option>Dark</option></select></label><label>Accent color<input value="#236b5b"></label><button class="primary" data-demo-message="Appearance preference saved for this demo.">Save appearance</button></div>'
+      : selected === 'security'
+        ? '<div class="panel"><h3>Current session</h3><p>Demo browser · Amsterdam · active now</p><button data-demo-message="Other sessions would be revoked on the server.">Log out everywhere else</button></div>'
+        : selected === 'keys'
+          ? '<div class="panel"><h3>alice-laptop</h3><p><code>SHA256:q3DemoFingerprint</code></p><button data-demo-message="The demo does not accept real credentials.">Add SSH key</button></div>'
+          : selected === 'tokens'
+            ? '<div class="panel"><p>Tokens are shown only once and stored hashed.</p><button data-demo-message="The static demo never generates real credentials.">Create token</button></div>'
+            : '<form class="panel compact"><label>Username<input value="alice" readonly></label><label>Display name<input value="Alice Nguyen"></label><label>Public email<input value="alice@example.test"></label><button class="primary" data-demo-message="Profile saved for this demo.">Save profile</button></form>';
+  showPage(
+    `<div class="section-layout"><aside><p class="eyebrow">User settings</p>${Object.entries(titles)
+      .map(
+        ([id, label]) =>
+          `<button class="${id === selected ? 'selected' : ''}" data-account="${id}">${label}</button>`,
+      )
+      .join(
+        '',
+      )}</aside><section class="section-content"><h1>${titles[selected]}</h1>${content}</section></div>`,
+  );
+  document.querySelectorAll('[data-account]').forEach((button) => {
+    button.onclick = () => showAccount(button.dataset.account);
+  });
+  bindDemoMessages();
+}
+function bindDemoMessages() {
+  document.querySelectorAll('[data-demo-message]').forEach((button) => {
+    button.onclick = (event) => {
+      event.preventDefault();
+      openModal('Interactive demo', `<p>${escape(button.dataset.demoMessage)}</p>`);
+    };
+  });
 }
 function showRepository() {
   homeView.hidden = true;
@@ -326,27 +490,11 @@ function showRepository() {
 }
 function globalAction(action) {
   if (action === 'home') return showHome();
-  if (action === 'explore') return showHome();
-  if (action === 'docs')
-    return openModal(
-      'Documentation',
-      '<p class="muted">Getting Started, Git Basics, SSH keys, HTTPS authentication, backups, and plugins are available in the full Bareline documentation.</p>',
-    );
-  if (action === 'groups')
-    return openModal(
-      'Groups',
-      '<p class="muted">Alice belongs to the demo group <strong>paper-trail</strong>. Group management is represented here because this static demo has no multi-user backend.</p>',
-    );
-  if (action === 'admin')
-    return openModal(
-      'Administration',
-      '<p class="muted">In Bareline, administrators manage users, repositories, plugins, audit logs, search, and authentication. The full administration interface requires the server.</p>',
-    );
-  if (action === 'account')
-    return openModal(
-      'Alice Nguyen',
-      '<p class="muted">Account settings include profile, appearance, sessions, SSH keys, passkeys, and personal access tokens.</p>',
-    );
+  if (action === 'explore') return showExplore();
+  if (action === 'docs') return showDocs();
+  if (action === 'groups') return showGroups();
+  if (action === 'admin') return showAdmin();
+  if (action === 'account') return showAccount();
   if (action === 'logout') return showHome(true);
 }
 document.querySelectorAll('[data-view]').forEach((button) => {
