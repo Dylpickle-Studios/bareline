@@ -47,6 +47,7 @@ export class ArchiveService {
       if (code !== 0) output.destroy(new Error('Archive generation failed'));
     });
     const source = format === 'tar.gz' ? child.stdout.pipe(createGzip({ level: 6 })) : child.stdout;
+    limiter.on('error', (error) => output.destroy(error));
     source.pipe(limiter).pipe(output);
     output.on('close', () => {
       if (!child.killed) child.kill('SIGKILL');

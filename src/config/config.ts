@@ -167,6 +167,42 @@ function envOverride(environment: NodeJS.ProcessEnv, key: string): string | unde
   return value === '' ? undefined : value;
 }
 
+// Declarative allowlist of config fields that may be overridden by a `BARELINE_<SUFFIX>` (or
+// legacy `GIT_HOST_<SUFFIX>`) environment variable, primarily for container deployments. Fields
+// not listed here are configurable only through the YAML file (optionally using `${VAR}`
+// substitution, which supports arbitrary fields but requires editing the file).
+const envOverridableFields: readonly {
+  path: readonly [string, string];
+  suffix: string;
+  parse?: (raw: string) => unknown;
+}[] = [
+  { path: ['server', 'host'], suffix: 'SERVER_HOST' },
+  { path: ['server', 'port'], suffix: 'SERVER_PORT', parse: Number },
+  { path: ['server', 'publicUrl'], suffix: 'SERVER_PUBLIC_URL' },
+  { path: ['database', 'path'], suffix: 'DATABASE_PATH' },
+  { path: ['storage', 'data'], suffix: 'STORAGE_DATA' },
+  { path: ['storage', 'repositories'], suffix: 'STORAGE_REPOSITORIES' },
+  { path: ['storage', 'trash'], suffix: 'STORAGE_TRASH' },
+  { path: ['storage', 'lfs'], suffix: 'STORAGE_LFS' },
+  { path: ['git', 'executable'], suffix: 'GIT_EXECUTABLE' },
+  { path: ['ssh', 'host'], suffix: 'SSH_HOST' },
+  { path: ['security', 'masterKey'], suffix: 'SECURITY_MASTER_KEY' },
+];
+
+function applyEnvOverrides(
+  candidate: Record<string, unknown>,
+  environment: NodeJS.ProcessEnv,
+): void {
+  for (const field of envOverridableFields) {
+    const raw = envOverride(environment, field.suffix);
+    if (raw === undefined) continue;
+    const [sectionKey, fieldKey] = field.path;
+    const section = candidate[sectionKey];
+    if (typeof section !== 'object' || section === null) continue;
+    (section as Record<string, unknown>)[fieldKey] = field.parse ? field.parse(raw) : raw;
+  }
+}
+
 export function loadConfig(file: string, environment = process.env): AppConfig {
   if (!isAbsolute(file)) file = resolve(file);
   const parsed: unknown = YAML.parse(readFileSync(file, 'utf8'));
@@ -175,18 +211,7 @@ export function loadConfig(file: string, environment = process.env): AppConfig {
     throw new Error('Configuration must be a YAML map');
 
   const candidate = structuredClone(value) as Record<string, unknown>;
-  const server = candidate.server as Record<string, unknown> | undefined;
-  const database = candidate.database as Record<string, unknown> | undefined;
-  if (server) {
-    const port = envOverride(environment, 'SERVER_PORT');
-    const publicUrl = envOverride(environment, 'SERVER_PUBLIC_URL');
-    if (port) server.port = Number(port);
-    if (publicUrl) server.publicUrl = publicUrl;
-  }
-  if (database) {
-    const path = envOverride(environment, 'DATABASE_PATH');
-    if (path) database.path = path;
-  }
+  applyEnvOverrides(candidate, environment);
 
   const result = configSchema.safeParse(candidate);
   if (!result.success) {

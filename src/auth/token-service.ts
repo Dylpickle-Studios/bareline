@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
 import type { Database } from '../database/database.js';
 import type { AuditService } from '../audit/audit-service.js';
 import { hashSecret } from './auth-service.js';
@@ -123,14 +123,18 @@ export class TokenService {
     const row = this.database
       .prepare(
         `
-        SELECT id, user_id, token_hash, scopes FROM tokens
-        WHERE prefix = ? AND kind = 'api' AND revoked_at IS NULL
-          AND (expires_at IS NULL OR expires_at > ?)
+        SELECT t.id, t.user_id, t.token_hash, t.scopes FROM tokens t
+        JOIN users u ON u.id = t.user_id
+        WHERE t.prefix = ? AND t.kind = 'api' AND t.revoked_at IS NULL
+          AND (t.expires_at IS NULL OR t.expires_at > ?) AND u.status = 'active'
       `,
       )
       .get(match[1], new Date().toISOString()) as
       { id: number; user_id: number; token_hash: Buffer; scopes: string } | undefined;
-    if (!row?.token_hash.equals(hashSecret(token))) return null;
+    if (!row) return null;
+    const expectedHash = hashSecret(token);
+    if (row.token_hash.length !== expectedHash.length || !timingSafeEqual(row.token_hash, expectedHash))
+      return null;
     const scopes = JSON.parse(row.scopes) as unknown;
     if (!Array.isArray(scopes) || !scopes.every((scope) => typeof scope === 'string')) return null;
     if (!scopes.includes(requiredScope) && !scopes.includes('*')) return null;

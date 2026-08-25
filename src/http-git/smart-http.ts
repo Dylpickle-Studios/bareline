@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import type { Readable } from 'node:stream';
 import type { FastifyReply } from 'fastify';
 import type { AppConfig } from '../config/config.js';
-import { controlledGitEnvironment, gitSafetyArguments } from '../git/git-runner.js';
+import { ManagedProcess, controlledGitEnvironment, gitSafetyArguments } from '../git/git-runner.js';
 
 const allowedServices = new Set(['git-upload-pack', 'git-receive-pack']);
 
@@ -59,38 +59,29 @@ export async function serveSmartHttp(
   let stderr = '';
   let responseBytes = 0;
   let requestBytes = 0;
-  let settled = false;
   reply.hijack();
 
   const completion = new Promise<void>((resolve, reject) => {
-    const finish = (error?: Error): void => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      request.body?.removeListener('aborted', abort);
-      request.body?.removeListener('error', abort);
-      reply.raw.removeListener('close', abort);
-      if (error) reject(error);
-      else resolve();
-    };
-    const terminate = (error: Error): void => {
-      child.kill('SIGKILL');
-      finish(error);
-    };
-    const abort = (): void => {
-      terminate(new Error('Git HTTP transfer was cancelled'));
-    };
-    const timer = setTimeout(
-      () => {
-        terminate(new Error('Git HTTP transfer exceeded its time limit'));
+    const proc = new ManagedProcess(child, {
+      timeoutMs: Math.max(config.git.timeoutMs, 120_000),
+      onTimeout: () => new Error('Git HTTP transfer exceeded its time limit'),
+      onSettle: (error) => {
+        if (error) reject(error);
       },
-      Math.max(config.git.timeoutMs, 120_000),
-    );
-    request.body?.once('aborted', abort);
-    request.body?.once('error', abort);
-    reply.raw.once('close', abort);
+    });
+    const cancelled = (): Error => new Error('Git HTTP transfer was cancelled');
+    if (request.body) {
+      proc.cancelOn(request.body, 'aborted', cancelled());
+      proc.cancelOn(request.body, 'error', cancelled());
+    }
+    proc.cancelOn(reply.raw, 'close', cancelled());
+    const succeed = (): void => {
+      proc.settle();
+      resolve();
+    };
+
     child.on('error', () => {
-      finish(new Error('Unable to start Git HTTP backend'));
+      proc.settle(new Error('Unable to start Git HTTP backend'));
     });
     child.stderr.on('data', (chunk: Buffer) => {
       if (stderr.length < 4096) stderr += chunk.toString('utf8');
@@ -98,7 +89,7 @@ export async function serveSmartHttp(
     child.stdout.on('data', (chunk: Buffer) => {
       responseBytes += chunk.length;
       if (responseBytes > transferLimit) {
-        terminate(new Error('Git HTTP response exceeded the transfer limit'));
+        proc.terminate(new Error('Git HTTP response exceeded the transfer limit'));
         return;
       }
       if (headersSent) {
@@ -107,7 +98,7 @@ export async function serveSmartHttp(
       }
       headerBuffer = Buffer.concat([headerBuffer, chunk]);
       if (headerBuffer.length > 32 * 1024) {
-        terminate(new Error('Git HTTP response headers exceeded limit'));
+        proc.terminate(new Error('Git HTTP response headers exceeded limit'));
         return;
       }
       const separator = headerBuffer.indexOf('\r\n\r\n');
@@ -115,34 +106,40 @@ export async function serveSmartHttp(
       const index = separator >= 0 ? separator : alternateSeparator;
       if (index < 0) return;
       const separatorLength = separator >= 0 ? 4 : 2;
-      const parsed = parseCgiHeaders(headerBuffer.subarray(0, index).toString('latin1'));
+      let parsed: { status: number; headers: Record<string, string> };
+      try {
+        parsed = parseCgiHeaders(headerBuffer.subarray(0, index).toString('latin1'));
+      } catch (error) {
+        proc.terminate(error instanceof Error ? error : new Error('Invalid Git HTTP response header'));
+        return;
+      }
       reply.raw.writeHead(parsed.status, parsed.headers);
       headersSent = true;
       reply.raw.write(headerBuffer.subarray(index + separatorLength));
       headerBuffer = Buffer.alloc(0);
     });
     child.on('close', (code) => {
-      clearTimeout(timer);
       if (code !== 0) {
-        if (!headersSent) finish(new Error(`Git HTTP backend failed: ${stderr.slice(0, 500)}`));
+        if (!headersSent)
+          proc.settle(new Error(`Git HTTP backend failed: ${stderr.slice(0, 500)}`));
         else {
           reply.raw.destroy();
-          finish(new Error('Git HTTP backend failed during transfer'));
+          proc.settle(new Error('Git HTTP backend failed during transfer'));
         }
         return;
       }
       if (!headersSent) {
-        finish(new Error('Git HTTP backend returned no headers'));
+        proc.settle(new Error('Git HTTP backend returned no headers'));
         return;
       }
       reply.raw.end();
-      finish();
+      succeed();
     });
 
     request.body?.on('data', (chunk: Buffer | string) => {
       requestBytes += typeof chunk === 'string' ? Buffer.byteLength(chunk) : chunk.length;
       if (requestBytes > transferLimit)
-        terminate(new Error('Git HTTP request exceeded the transfer limit'));
+        proc.terminate(new Error('Git HTTP request exceeded the transfer limit'));
     });
   });
 

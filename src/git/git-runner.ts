@@ -1,6 +1,68 @@
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { open, realpath, stat } from 'node:fs/promises';
 import { GitError } from './errors.js';
+
+interface CancellationSource {
+  once(event: string, listener: () => void): unknown;
+  removeListener(event: string, listener: () => void): unknown;
+}
+
+export interface ManagedProcessOptions {
+  timeoutMs: number;
+  onTimeout: () => Error;
+  /**
+   * Called exactly once, the moment the process lifecycle ends (from the timeout, a
+   * cancellation source, `terminate()`, or a caller-driven `settle()`). Receives the
+   * termination error, or `undefined` for a clean settle.
+   */
+  onSettle: (error: Error | undefined) => void;
+}
+
+/**
+ * Shared bookkeeping for the spawn/timeout/cancel/kill state machine that every Git-invoking
+ * transport (local exec, Smart HTTP, SSH forced-command) otherwise reimplements independently.
+ * Callers still wire up their own stdout/stdin handling; this only owns "settle exactly once,
+ * clear the timer, and stop listening to cancellation sources."
+ */
+export class ManagedProcess {
+  private settled = false;
+  private readonly timer: ReturnType<typeof setTimeout>;
+  private readonly cleanups: (() => void)[] = [];
+
+  constructor(
+    private readonly child: ChildProcess,
+    private readonly options: ManagedProcessOptions,
+  ) {
+    this.timer = setTimeout(() => {
+      this.terminate(options.onTimeout());
+    }, options.timeoutMs);
+  }
+
+  /** Terminates the process if `source` emits `event` before the process otherwise settles. */
+  cancelOn(source: CancellationSource, event: string, error: Error): void {
+    const handler = (): void => {
+      this.terminate(error);
+    };
+    source.once(event, handler);
+    this.cleanups.push(() => source.removeListener(event, handler));
+  }
+
+  /** Kills the process and settles with `error`. */
+  terminate(error: Error): void {
+    if (this.settled) return;
+    this.child.kill('SIGKILL');
+    this.settle(error);
+  }
+
+  /** Ends the lifecycle without killing the process. Safe to call more than once. */
+  settle(error?: Error): void {
+    if (this.settled) return;
+    this.settled = true;
+    clearTimeout(this.timer);
+    for (const cleanup of this.cleanups.splice(0)) cleanup();
+    this.options.onSettle(error);
+  }
+}
 
 export interface GitRunOptions {
   cwd?: string;
@@ -87,30 +149,36 @@ export class GitRunner {
       const stdout: Buffer[] = [];
       const stderr: Buffer[] = [];
       let outputBytes = 0;
-      let settled = false;
-      const finish = (error?: Error, result?: GitResult): void => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        options.signal?.removeEventListener('abort', abort);
-        if (error) reject(error);
-        else if (result) resolve(result);
-        else reject(new GitError('Git operation ended without a result', 'failed'));
-      };
-      const terminate = (error: GitError): void => {
-        child.kill('SIGKILL');
-        finish(error);
-      };
-      const abort = (): void => {
-        terminate(new GitError('Git operation cancelled', 'cancelled'));
-      };
-      const timer = setTimeout(() => {
-        terminate(new GitError('Git operation exceeded its time limit', 'timeout'));
-      }, timeoutMs);
 
-      options.signal?.addEventListener('abort', abort, { once: true });
+      const proc = new ManagedProcess(child, {
+        timeoutMs,
+        onTimeout: () => new GitError('Git operation exceeded its time limit', 'timeout'),
+        onSettle: (error) => {
+          if (error) reject(error);
+        },
+      });
+      const { signal } = options;
+      if (signal) {
+        proc.cancelOn(
+          {
+            once: (event, listener) => {
+              signal.addEventListener(event, listener, { once: true });
+            },
+            removeListener: (event, listener) => {
+              signal.removeEventListener(event, listener);
+            },
+          },
+          'abort',
+          new GitError('Git operation cancelled', 'cancelled'),
+        );
+      }
+      const succeed = (result: GitResult): void => {
+        proc.settle();
+        resolve(result);
+      };
+
       child.on('error', () => {
-        finish(new GitError('Unable to start Git', 'failed'));
+        proc.settle(new GitError('Unable to start Git', 'failed'));
       });
       child.stdout.on('data', (chunk: Buffer) => {
         outputBytes += chunk.length;
@@ -119,19 +187,19 @@ export class GitRunner {
             const used = stdout.reduce((total, value) => total + value.length, 0);
             stdout.push(chunk.subarray(0, Math.max(0, maxOutputBytes - used)));
             child.kill('SIGKILL');
-            finish(undefined, {
+            succeed({
               stdout: Buffer.concat(stdout),
               stderr: '',
               exitCode: -1,
               truncated: true,
             });
-          } else terminate(new GitError('Git output limit exceeded', 'output_limit'));
+          } else proc.terminate(new GitError('Git output limit exceeded', 'output_limit'));
         } else stdout.push(chunk);
       });
       child.stderr.on('data', (chunk: Buffer) => {
         outputBytes += chunk.length;
         if (outputBytes > maxOutputBytes)
-          terminate(new GitError('Git output limit exceeded', 'output_limit'));
+          proc.terminate(new GitError('Git output limit exceeded', 'output_limit'));
         else if (Buffer.concat(stderr).length < 64 * 1024) stderr.push(chunk);
       });
       child.on('close', (code) => {
@@ -139,7 +207,7 @@ export class GitRunner {
         const accepted = options.acceptedExitCodes ?? [0];
         const safeStderr = Buffer.concat(stderr).toString('utf8').slice(0, 4096);
         if (!accepted.includes(exitCode)) {
-          finish(
+          proc.settle(
             new GitError(
               safeStderr ? `Git operation failed: ${safeStderr}` : 'Git operation failed',
               'failed',
@@ -147,7 +215,7 @@ export class GitRunner {
           );
           return;
         }
-        finish(undefined, {
+        succeed({
           stdout: Buffer.concat(stdout),
           stderr: safeStderr,
           exitCode,

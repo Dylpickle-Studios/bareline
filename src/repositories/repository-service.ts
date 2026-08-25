@@ -461,10 +461,11 @@ export class RepositoryService {
         await realpath(this.config.storage.repositories),
       );
     for (const configuredRoot of this.config.storage.importRoots) {
-      const root = await realpath(configuredRoot);
-      const candidate = await realpath(path);
-      if (candidate === root || candidate.startsWith(`${root}/`))
-        return await this.git.assertRepository(candidate, root);
+      try {
+        return await this.git.assertRepository(path, configuredRoot);
+      } catch {
+        continue;
+      }
     }
     throw new NotFoundError();
   }

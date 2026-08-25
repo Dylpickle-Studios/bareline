@@ -4,8 +4,8 @@
   --line: #dbe2dd;
   --paper: #f7f7f3;
   --surface: #fff;
-  --accent: #5b55da;
-  --pale: #eeedfb;
+  --accent: #236b5b;
+  --pale: #e6f1ed;
   --success: #236b5b;
   --plus: #dff4e9;
   --minus: #f9e2e1;
@@ -16,8 +16,8 @@ html.dark {
   --line: #34423c;
   --paper: #17201d;
   --surface: #1d2925;
-  --accent: #9d98ff;
-  --pale: #28263c;
+  --accent: #70c4a3;
+  --pale: #1e3830;
   --success: #70c4a3;
   --plus: #184634;
   --minus: #4b282b;
@@ -261,7 +261,8 @@ footer button {
 }
 .docs-layout aside button.selected,
 .section-layout aside button.selected {
-  background: #eceeea;
+  background: var(--pale);
+  color: var(--accent);
   font-weight: 750;
 }
 .doc-article {
@@ -786,10 +787,19 @@ textarea {
     flex-wrap: wrap;
   }
   header {
+    height: auto;
+    padding-block: 12px;
     padding-inline: 16px;
+    flex-wrap: wrap;
+    row-gap: 8px;
   }
-  header nav button[data-global]:not([data-global='explore']) {
-    display: none;
+  header nav {
+    width: 100%;
+    overflow-x: auto;
+    justify-content: flex-start;
+  }
+  header nav button {
+    flex: 0 0 auto;
   }
   .latest,
   .bar {
