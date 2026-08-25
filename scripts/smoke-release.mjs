@@ -1,13 +1,18 @@
 import { spawn } from 'node:child_process';
-import { mkdtemp, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { arch, platform, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { promisify } from 'node:util';
 import { execFile } from 'node:child_process';
 
 const run = promisify(execFile);
-const bundle = resolve(process.argv[2] ?? 'release/bareline-0.1.0-linux-x64');
+const packageData = JSON.parse(await readFile('package.json', 'utf8'));
+const defaultBundle = resolve(
+  'release',
+  `${packageData.name}-${packageData.version}-${platform()}-${arch()}`,
+);
+const bundle = resolve(process.argv[2] ?? defaultBundle);
 const root = await mkdtemp(join(tmpdir(), 'bareline-release-smoke-'));
 const data = join(root, 'data');
 const config = join(root, 'config.yml');
