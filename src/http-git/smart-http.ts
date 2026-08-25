@@ -110,7 +110,9 @@ export async function serveSmartHttp(
       try {
         parsed = parseCgiHeaders(headerBuffer.subarray(0, index).toString('latin1'));
       } catch (error) {
-        proc.terminate(error instanceof Error ? error : new Error('Invalid Git HTTP response header'));
+        proc.terminate(
+          error instanceof Error ? error : new Error('Invalid Git HTTP response header'),
+        );
         return;
       }
       reply.raw.writeHead(parsed.status, parsed.headers);

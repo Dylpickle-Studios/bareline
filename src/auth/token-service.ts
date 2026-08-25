@@ -133,7 +133,10 @@ export class TokenService {
       { id: number; user_id: number; token_hash: Buffer; scopes: string } | undefined;
     if (!row) return null;
     const expectedHash = hashSecret(token);
-    if (row.token_hash.length !== expectedHash.length || !timingSafeEqual(row.token_hash, expectedHash))
+    if (
+      row.token_hash.length !== expectedHash.length ||
+      !timingSafeEqual(row.token_hash, expectedHash)
+    )
       return null;
     const scopes = JSON.parse(row.scopes) as unknown;
     if (!Array.isArray(scopes) || !scopes.every((scope) => typeof scope === 'string')) return null;
