@@ -15,17 +15,16 @@ features will not become core abstractions.
 
 ## Current development status
 
-The application is under active development toward its first production release. The implemented
-foundation includes validated YAML configuration, versioned SQLite migrations, Argon2id accounts,
-secure sessions and CSRF protection, centralized repository permissions, opaque bare-repository
-storage, repository browsing, commits/diffs/refs, Smart HTTP clone/fetch/push plumbing, scoped hashed
-tokens, an OpenSSH forced-command boundary, immutable audit records, responsive server-rendered UI,
-and real-Git integration tests.
+Bareline 1.0 is released. Every item on the pre-1.0 acceptance checklist in
+[docs/production-readiness.md](docs/production-readiness.md) is complete: validated YAML
+configuration, versioned SQLite migrations, Argon2id accounts, secure sessions and CSRF protection,
+centralized repository permissions, opaque bare-repository storage, repository browsing,
+commits/diffs/refs, Smart HTTP clone/fetch/push plumbing, scoped hashed tokens, an OpenSSH
+forced-command boundary, immutable audit records, responsive server-rendered UI, LFS, plugins,
+backups, and real-Git integration/security/Playwright/API tests, a non-root Docker image, and a
+self-contained standalone bundle.
 
-Do not treat the current pre-1.0 tree as production-ready until the release checklist is complete.
-The live acceptance checklist is maintained in
-[docs/production-readiness.md](docs/production-readiness.md); unchecked required items are active
-work, not deferred aspirations.
+Semantic versioning applies from 1.0 onward; see [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 ## Design preview and container image
 

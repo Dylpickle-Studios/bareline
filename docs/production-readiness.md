@@ -1,8 +1,9 @@
 # Production-readiness matrix
 
 This document is the acceptance checklist for the original product specification. A checked item
-means the behavior is implemented and covered proportionately by automated tests. The project must
-remain labeled pre-1.0 until every **Required before 1.0** item is checked.
+means the behavior is implemented and covered proportionately by automated tests. Every
+**Required before 1.0** item is checked and the release gate below has passed; Bareline 1.0 is
+released.
 
 ## Required before 1.0
 
@@ -63,7 +64,7 @@ remain labeled pre-1.0 until every **Required before 1.0** item is checked.
 - [x] Finish every documented plugin contribution category (renderers, Markdown, auth, themes, and admin UI)
 - [x] Finish original-spec API coverage and exact schema audit rather than relying on generic contracts
 - [x] Standalone bundle with bundled Node runtime, native dependencies, and startup/backup/restore smoke
-- [ ] Docker image build and health smoke test
+- [x] Docker image build and health smoke test
 - [x] Release-bundle startup/backup/restore smoke test in the development environment
 
 ## Explicit core exclusions
