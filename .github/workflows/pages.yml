@@ -26,7 +26,7 @@ jobs:
     env:
       PAGES_ADMIN_TOKEN: ${{ secrets.PAGES_ADMIN_TOKEN }}
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # A repository administrator can add this fine-grained token with Pages write and
       # Administration write permissions to enable Pages on the first run. GITHUB_TOKEN cannot
       # create a Pages site, so normal deployments keep using the least-privileged token.
