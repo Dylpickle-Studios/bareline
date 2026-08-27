@@ -73,7 +73,40 @@ jobs:
           SBOM: ${{ steps.artifacts.outputs.sbom }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
-            --title "Bareline $GITHUB_REF_NAME" \
-            --generate-notes \
-            "$ARCHIVE" "$ARCHIVE.sha256" "$ARCHIVE.sigstore.json" "$SBOM" "$SBOM.sigstore.json"
+          ASSETS=(
+            "$ARCHIVE"
+            "$ARCHIVE.sha256"
+            "$ARCHIVE.sigstore.json"
+            "$SBOM"
+            "$SBOM.sigstore.json"
+          )
+
+          if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" \
+              --verify-tag \
+              --title "Bareline $GITHUB_REF_NAME" \
+              --generate-notes \
+              "${ASSETS[@]}"
+            exit 0
+          fi
+
+          IS_DRAFT="$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq '.isDraft')"
+          if [ "$IS_DRAFT" = "true" ]; then
+            gh release upload "$GITHUB_REF_NAME" "${ASSETS[@]}" --clobber
+            gh release edit "$GITHUB_REF_NAME" \
+              --title "Bareline $GITHUB_REF_NAME" \
+              --draft=false
+            exit 0
+          fi
+
+          RELEASE_ASSETS="$(gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name')"
+          for asset in "${ASSETS[@]}"; do
+            name="$(basename "$asset")"
+            if ! grep -Fxq "$name" <<< "$RELEASE_ASSETS"; then
+              echo "Published release $GITHUB_REF_NAME is missing required asset: $name" >&2
+              echo "Published releases are not modified automatically; cut a patch release instead." >&2
+              exit 1
+            fi
+          done
+
+          echo "Release $GITHUB_REF_NAME is already published with all required assets."
