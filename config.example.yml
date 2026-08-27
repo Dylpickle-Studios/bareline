@@ -35,6 +35,9 @@ anonymous:
 limits:
   filePreviewBytes: 2097152
   gitOutputBytes: 16777216
+  gitInputBytes: 67108864
+  gitConcurrent: 8
+  gitPending: 32
   diffBytes: 10485760
   diffLines: 20000
   diffFiles: 500

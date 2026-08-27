@@ -45,10 +45,24 @@ if (command === 'version') {
   const config = loadConfig(configFile);
   const app = await createApp(config);
   await app.listen({ host: config.server.host, port: config.server.port });
+  let closing = false;
+  const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
+    if (closing) return;
+    closing = true;
+    app.log.info({ signal }, 'shutdown requested');
+    try {
+      await app.close();
+    } catch (error) {
+      app.log.error({ err: error }, 'graceful shutdown failed');
+      process.exitCode = 1;
+    }
+  };
+  process.once('SIGTERM', () => void shutdown('SIGTERM'));
+  process.once('SIGINT', () => void shutdown('SIGINT'));
 } else if (command === 'doctor') {
   const config = loadConfig(configFile);
   const database = openDatabase(config.database.path);
-  const git = new GitRunner(config.git.executable, config.git.timeoutMs, 4096);
+  const git = configuredGit(config, 4096);
   const checks: [string, boolean, string][] = [];
   const gitVersion = await git.run(['--version'], { timeoutMs: 2000, maxOutputBytes: 4096 });
   checks.push(['Git executable', true, gitVersion.stdout.toString('utf8').trim()]);
@@ -100,11 +114,7 @@ if (command === 'version') {
     .prepare("SELECT id FROM users WHERE username = ? AND status = 'active' AND is_admin = 1")
     .get(requiredValue('--actor')) as { id: number } | undefined;
   if (!actor) throw new Error('Active administrator actor not found');
-  const git = new GitRunner(
-    config.git.executable,
-    config.git.timeoutMs,
-    config.limits.gitOutputBytes,
-  );
+  const git = configuredGit(config);
   const repositories = new RepositoryService(database, git, config, new AuditService(database));
   const repository = await repositories.importExistingByOwnerName({
     actorUserId: actor.id,
@@ -119,11 +129,7 @@ if (command === 'version') {
 } else if (command === 'repo' && arguments_[1] === 'rescan') {
   const config = loadConfig(configFile);
   const database = openDatabase(config.database.path);
-  const git = new GitRunner(
-    config.git.executable,
-    config.git.timeoutMs,
-    config.limits.gitOutputBytes,
-  );
+  const git = configuredGit(config);
   const repositories = new RepositoryService(database, git, config, new AuditService(database));
   const repository = repositories.find(requiredValue('--owner'), requiredValue('--name'));
   if (!repository) throw new Error('Repository not found');
@@ -160,11 +166,7 @@ if (command === 'version') {
   const config = loadConfig(configFile);
   const database = openDatabase(config.database.path);
   const audit = new AuditService(database);
-  const git = new GitRunner(
-    config.git.executable,
-    config.git.timeoutMs,
-    config.limits.gitOutputBytes,
-  );
+  const git = configuredGit(config);
   const repositories = new RepositoryService(database, git, config, audit);
   const search = new SearchService(
     database,
@@ -252,6 +254,7 @@ if (command === 'version') {
   process.stdout.write('Backup uploaded.\n');
 } else if (command === 'backup') {
   const config = loadConfig(configFile);
+  requireMasterKey(config, 'backup creation');
   const output = valueAfter('--output');
   if (!output) throw new Error('--output is required');
   const database = openDatabase(config.database.path);
@@ -265,23 +268,27 @@ if (command === 'version') {
   );
 } else if (command === 'restore') {
   const config = loadConfig(configFile);
+  requireMasterKey(config, 'restore');
   const input = valueAfter('--input');
   if (!input) throw new Error('--input is required');
   await BackupService.restore(input, config, arguments_.includes('--confirm-replace'));
   process.stdout.write('Restore completed. Previous data was moved to a pre-restore directory.\n');
 } else if (command === 'restore-verify') {
+  const config = loadConfig(configFile);
+  requireMasterKey(config, 'backup verification');
   const input = requiredValue('--input');
-  const manifest = await BackupService.verify(input);
+  const manifest = await BackupService.verify(
+    input,
+    config.security.masterKey
+      ? { masterKey: config.security.masterKey, requireAuthenticated: true }
+      : { requireAuthenticated: true },
+  );
   process.stdout.write(`Backup is valid (${String(Object.keys(manifest.files).length)} files).\n`);
 } else if (command === 'repo' && arguments_[1] === 'mirrors-run') {
   const config = loadConfig(configFile);
   const database = openDatabase(config.database.path);
   const audit = new AuditService(database);
-  const git = new GitRunner(
-    config.git.executable,
-    config.git.timeoutMs,
-    config.limits.gitOutputBytes,
-  );
+  const git = configuredGit(config);
   const repositories = new RepositoryService(database, git, config, audit);
   const result = await new RepositoryEnhancementService(
     database,
@@ -335,11 +342,7 @@ if (command === 'version') {
     throw new Error('Invalid SSH forced-command context');
   }
   const database = openDatabase(config.database.path);
-  const git = new GitRunner(
-    config.git.executable,
-    config.git.timeoutMs,
-    config.limits.gitOutputBytes,
-  );
+  const git = configuredGit(config);
   const repositories = new RepositoryService(database, git, config, new AuditService(database));
   const authorized =
     Number.isSafeInteger(deployKeyId) && deployKeyId > 0
@@ -399,4 +402,20 @@ function requiredValue(name: string): string {
   const value = valueAfter(name);
   if (!value) throw new Error(`${name} is required`);
   return value;
+}
+
+function requireMasterKey(config: ReturnType<typeof loadConfig>, operation: string): void {
+  if (!config.security.masterKey)
+    throw new Error(`security.masterKey is required for ${operation}`);
+}
+
+function configuredGit(
+  config: ReturnType<typeof loadConfig>,
+  maxOutputBytes = config.limits.gitOutputBytes,
+): GitRunner {
+  return new GitRunner(config.git.executable, config.git.timeoutMs, maxOutputBytes, {
+    maxConcurrent: config.limits.gitConcurrent,
+    maxPending: config.limits.gitPending,
+    maxInputBytes: config.limits.gitInputBytes,
+  });
 }

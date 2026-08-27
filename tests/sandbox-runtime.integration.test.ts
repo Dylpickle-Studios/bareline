@@ -32,7 +32,7 @@ function structuredEchoModule(): Buffer {
   const section = (id: number, value: number[]) => [id, ...unsigned(value.length), ...value];
   const type = [2, 0x60, 1, 0x7f, 1, 0x7f, 0x60, 2, 0x7f, 0x7f, 1, 0x7e];
   const functions = [2, 0, 1];
-  const memory = [1, 0, 1];
+  const memory = [1, 1, 1, 16];
   const exports = [
     3,
     ...name('memory'),
@@ -100,6 +100,13 @@ entrypoint: plugin.wasm
     await expect(new SandboxRuntime(database).invoke('example.answer', 'run', [])).resolves.toBe(
       42,
     );
+    await writeFile(
+      join(config.storage.data, 'plugins', 'example.answer', '1.0.0', 'plugin.wasm'),
+      Buffer.concat([returnsFortyTwo, Buffer.from([0])]),
+    );
+    await expect(new SandboxRuntime(database).invoke('example.answer', 'run', [])).rejects.toThrow(
+      /integrity/,
+    );
     database.close();
   });
 
@@ -122,7 +129,7 @@ version: 1.0.0
 apiVersion: 1
 runtime: sandboxed
 entrypoint: plugin.wasm
-permissions: [repositories.read, network.outbound]
+permissions: [repositories.read]
 `,
       'utf8',
     );
@@ -130,6 +137,13 @@ permissions: [repositories.read, network.outbound]
     await manager.installLocal(admin.id, source, { trustedRiskAccepted: false });
     manager.setPermission(admin.id, 'example.structured', 'repositories.read', true);
     manager.setEnabled(admin.id, 'example.structured', true, false);
+    await expect(
+      new SandboxRuntime(database, 2000, { wasmMemoryBytes: 64 * 1024 }).invokeJson(
+        'example.structured',
+        'handle',
+        { repository: 'alice/example' },
+      ),
+    ).rejects.toThrow(/linear memory exceeds its limit/);
     const response = await new SandboxRuntime(database).invokeJson<{
       apiVersion: number;
       capabilities: string[];
@@ -142,7 +156,6 @@ permissions: [repositories.read, network.outbound]
       host: {},
       input: { repository: 'alice/example' },
     });
-    expect(response.capabilities).not.toContain('network.outbound');
     database.close();
   });
 });

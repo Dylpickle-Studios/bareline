@@ -482,4 +482,9 @@ export const migrations: readonly Migration[] = [
       ) STRICT;
     `,
   },
+  {
+    version: 15,
+    name: 'plugin_package_digests',
+    sql: `ALTER TABLE plugins ADD COLUMN package_digest TEXT CHECK(package_digest IS NULL OR package_digest GLOB '[0-9a-f]*');`,
+  },
 ];

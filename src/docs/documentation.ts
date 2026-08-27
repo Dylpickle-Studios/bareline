@@ -18,6 +18,7 @@ export const documentation = [
   },
   { slug: 'ssh', title: 'SSH setup', file: 'ssh.md' },
   { slug: 'security', title: 'Security and threat model', file: 'threat-model.md' },
+  { slug: 'assurance', title: 'Security assurance', file: 'security-assurance.md' },
   { slug: 'readiness', title: 'Production readiness', file: 'production-readiness.md' },
 ] as const;
 

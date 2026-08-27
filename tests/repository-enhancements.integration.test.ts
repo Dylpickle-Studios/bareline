@@ -73,6 +73,20 @@ describe('Git-focused repository enhancements', () => {
         intervalMinutes: 60,
       });
     }).toThrow('not allowlisted');
+    const privateMirrorEnhancements = new RepositoryEnhancementService(
+      database,
+      git,
+      repositories,
+      audit,
+      ['127.0.0.1'],
+    );
+    expect(() => {
+      privateMirrorEnhancements.configureMirror(repository, user.id, {
+        direction: 'pull',
+        remoteUrl: 'https://127.0.0.1/repository.git',
+        intervalMinutes: 60,
+      });
+    }).toThrow('private or reserved');
     expect(
       (
         await git.run([

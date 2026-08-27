@@ -8,6 +8,7 @@ import { AuthService } from '../src/auth/auth-service.js';
 import { openDatabase } from '../src/database/database.js';
 import { PluginManager } from '../src/plugins/plugin-manager.js';
 import { examplePluginArchive } from '../src/plugins/example-download.js';
+import { OutboundPolicy } from '../src/security/outbound-policy.js';
 import { temporaryConfig } from './helpers.js';
 
 describe('plugin package management', () => {
@@ -40,6 +41,18 @@ describe('plugin package management', () => {
         trustedRiskAccepted: false,
       }),
     ).rejects.toThrow('allowlisted');
+    config.plugins.allowedGitHosts = ['plugins.example.test'];
+    const blockedDns = new PluginManager(
+      database,
+      config,
+      audit,
+      new OutboundPolicy(() => Promise.resolve([{ address: '169.254.169.254', family: 4 }])),
+    );
+    await expect(
+      blockedDns.installGit(admin.id, 'https://plugins.example.test/plugin.git', 'main', {
+        trustedRiskAccepted: false,
+      }),
+    ).rejects.toThrow('private or reserved');
     database.close();
   });
 
@@ -83,8 +96,9 @@ describe('plugin package management', () => {
     await writeFile(join(source, 'plugin.wasm'), Buffer.from([0, 97, 115, 109, 1, 0, 0, 0]));
     await writeManifest(source, '1.0.0', ['repositoryContents.read', 'storage.plugin']);
     const manager = new PluginManager(database, config, audit);
-    let plugin = await manager.installLocal(admin.id, source, { trustedRiskAccepted: false });
+    const plugin = await manager.installLocal(admin.id, source, { trustedRiskAccepted: false });
     expect(plugin.permissions.every((permission) => !permission.granted)).toBe(true);
+    expect(plugin.packageDigest).toMatch(/^[a-f0-9]{64}$/);
     manager.setPermission(admin.id, plugin.id, 'storage.plugin', true);
     manager.storageSet(plugin.id, 'count', Buffer.from('1'));
     expect(manager.storageGet(plugin.id, 'count')?.toString()).toBe('1');
@@ -102,14 +116,14 @@ describe('plugin package management', () => {
       'storage.plugin',
       'network.outbound',
     ]);
-    plugin = await manager.installLocal(admin.id, source, { trustedRiskAccepted: false });
+    await expect(
+      manager.installLocal(admin.id, source, { trustedRiskAccepted: false }),
+    ).rejects.toThrow(/ambient capabilities/);
+    await writeManifest(source, '1.1.0', ['repositoryContents.read', 'storage.plugin']);
+    const updated = await manager.installLocal(admin.id, source, { trustedRiskAccepted: false });
     expect(
-      plugin.permissions.find((permission) => permission.capability === 'storage.plugin')?.granted,
-    ).toBe(true);
-    expect(
-      plugin.permissions.find((permission) => permission.capability === 'network.outbound')
-        ?.granted,
-    ).toBe(false);
+      updated.permissions.find((permission) => permission.capability === 'storage.plugin'),
+    ).toMatchObject({ requested: true, granted: false });
     database.close();
   });
 });

@@ -2,15 +2,16 @@
 
 ## Supported versions
 
-Until 1.0, only the current main development line receives security fixes. After 1.0, the latest
-minor release and the previous minor release will receive coordinated security updates.
+Until a supported-release policy is published, only the current main development line is supported
+for security fixes. Do not infer a production support commitment from the package version.
 
 ## Reporting vulnerabilities
 
-Do not open a public issue for a suspected vulnerability. Send a private report to the security
-contact configured in the eventual project metadata. Include the affected version, reproduction,
-impact, and any proposed mitigation. Maintainers will acknowledge complete reports within three
-business days and coordinate disclosure after a fix is available.
+Do not open a public issue for a suspected vulnerability. The project owner must configure and test
+a private security channel before production exposure. Until that channel is published, contact the
+project owner through the private channel designated for this deployment; do not send secrets or
+details through a public issue or discussion. Include the affected version, reproduction, impact,
+and proposed mitigation. Response and disclosure timelines are agreed case by case.
 
 Never include production credentials, private repository contents, or personal data in a report.
 

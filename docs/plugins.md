@@ -20,9 +20,11 @@ after reviewing its source and supply chain.
 Sandboxed packages use a `.wasm` entry point. The runtime starts a disposable memory-limited Node
 process with deny-by-default process permissions, grants that loader read access only to its own
 worker and the validated module, rejects every ambient WebAssembly import, and bounds execution
-time and message size. This is defense in depth around the WebAssembly boundary rather than a claim
-that the Node permission model alone contains arbitrary JavaScript. Plugins receive no JavaScript
-execution surface.
+time and message size. The default limits are a 16 MiB WebAssembly linear-memory maximum, 64 MiB
+worker heap, 2-second invocation timeout, four active workers, sixteen queued invocations, and 1 MiB
+request/response envelopes; modules are capped at 64 MiB. This is defense in depth around the
+WebAssembly boundary rather than a claim that the Node permission model alone contains arbitrary
+JavaScript. Plugins receive no JavaScript execution surface.
 
 The structured ABI includes only granted capability names, bounded contribution context, and—when
 `storage.plugin` is granted—a base64 snapshot of the plugin's namespaced storage. A plugin may return
@@ -40,11 +42,18 @@ encrypted with the configured master key and never returned to plugin administra
 ## Permissions and trusted versus sandboxed plugins
 
 Requested permissions and granted permissions are separate. Installation grants none. An update
-that adds permissions leaves the new capabilities denied until review. Trusted Node plugins are
+that adds permissions leaves the new capabilities denied until review, and the package's recorded
+SHA-256 digest is checked before sandbox execution. Trusted Node plugins are
 equivalent to installing server software: arbitrary Node code can bypass application-level checks,
 so the UI presents a prominent warning and administrators must review the author and supply chain.
 Sandboxed WASM receives only explicit capability messages and has no ambient filesystem, network,
 process, database, session, or DOM access.
+
+Remote plugin installation is supply-chain constrained: npm packages must be explicitly allowlisted
+and pinned to an exact semantic version; HTTPS Git hosts must be explicitly allowlisted and outbound
+resolution is checked for DNS rebinding and private/reserved addresses. Redirects and embedded
+credentials are rejected. Installed package content is hashed and permission changes are reset to
+denied until re-approved.
 
 ## Server APIs and REST endpoints
 

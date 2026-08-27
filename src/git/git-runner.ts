@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { open, realpath, stat } from 'node:fs/promises';
+import { ConcurrencyLimiter, terminateChildProcess } from '../security/process-limits.js';
 import { GitError } from './errors.js';
 
 interface CancellationSource {
@@ -10,6 +11,8 @@ interface CancellationSource {
 export interface ManagedProcessOptions {
   timeoutMs: number;
   onTimeout: () => Error;
+  /** Set only when the child was spawned as a detached process-group leader. */
+  killProcessGroup?: boolean;
   /**
    * Called exactly once, the moment the process lifecycle ends (from the timeout, a
    * cancellation source, `terminate()`, or a caller-driven `settle()`). Receives the
@@ -50,8 +53,13 @@ export class ManagedProcess {
   /** Kills the process and settles with `error`. */
   terminate(error: Error): void {
     if (this.settled) return;
-    this.child.kill('SIGKILL');
+    terminateChildProcess(this.child, this.options.killProcessGroup ?? false);
     this.settle(error);
+  }
+
+  /** Stops the child without settling, for bounded-prefix/truncation flows. */
+  stop(): void {
+    terminateChildProcess(this.child, this.options.killProcessGroup ?? false);
   }
 
   /** Ends the lifecycle without killing the process. Safe to call more than once. */
@@ -73,6 +81,13 @@ export interface GitRunOptions {
   acceptedExitCodes?: readonly number[];
   indexFile?: string;
   truncateOutput?: boolean;
+  maxInputBytes?: number;
+}
+
+export interface GitRunnerLimits {
+  readonly maxConcurrent?: number;
+  readonly maxPending?: number;
+  readonly maxInputBytes?: number;
 }
 
 export interface GitResult {
@@ -123,15 +138,36 @@ export function controlledGitEnvironment(
 }
 
 export class GitRunner {
+  private readonly limiter: ConcurrencyLimiter;
+  private readonly maxInputBytes: number;
+
   constructor(
     private readonly executable: string,
     private readonly defaultTimeoutMs: number,
     private readonly defaultMaxOutputBytes: number,
-  ) {}
+    limits: GitRunnerLimits = {},
+  ) {
+    this.limiter = new ConcurrencyLimiter(limits.maxConcurrent ?? 8, limits.maxPending ?? 32);
+    this.maxInputBytes = limits.maxInputBytes ?? 64 * 1024 * 1024;
+    if (!Number.isSafeInteger(this.maxInputBytes) || this.maxInputBytes <= 0)
+      throw new Error('Git input limit must be positive');
+  }
 
   async run(arguments_: readonly string[], options: GitRunOptions = {}): Promise<GitResult> {
     if (arguments_.some((argument) => argument.includes('\0')))
       throw new GitError('Invalid Git argument', 'failed');
+    const inputLimit = options.maxInputBytes ?? this.maxInputBytes;
+    if (!Number.isSafeInteger(inputLimit) || inputLimit <= 0)
+      throw new GitError('Invalid Git input limit', 'failed');
+    if (options.input && options.input.byteLength > inputLimit)
+      throw new GitError('Git input limit exceeded', 'output_limit');
+    return await this.limiter.run(() => this.runUnbounded(arguments_, options));
+  }
+
+  private async runUnbounded(
+    arguments_: readonly string[],
+    options: GitRunOptions,
+  ): Promise<GitResult> {
     const timeoutMs = options.timeoutMs ?? this.defaultTimeoutMs;
     const maxOutputBytes = options.maxOutputBytes ?? this.defaultMaxOutputBytes;
 
@@ -139,6 +175,7 @@ export class GitRunner {
       const child = spawn(this.executable, [...gitSafetyArguments, ...arguments_], {
         cwd: options.cwd,
         shell: false,
+        detached: process.platform !== 'win32',
         windowsHide: true,
         stdio: ['pipe', 'pipe', 'pipe'],
         env: controlledGitEnvironment(
@@ -153,6 +190,7 @@ export class GitRunner {
       const proc = new ManagedProcess(child, {
         timeoutMs,
         onTimeout: () => new GitError('Git operation exceeded its time limit', 'timeout'),
+        killProcessGroup: process.platform !== 'win32',
         onSettle: (error) => {
           if (error) reject(error);
         },
@@ -186,7 +224,7 @@ export class GitRunner {
           if (options.truncateOutput) {
             const used = stdout.reduce((total, value) => total + value.length, 0);
             stdout.push(chunk.subarray(0, Math.max(0, maxOutputBytes - used)));
-            child.kill('SIGKILL');
+            proc.stop();
             succeed({
               stdout: Buffer.concat(stdout),
               stderr: '',

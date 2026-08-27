@@ -21,6 +21,24 @@ export const pluginCapabilities = [
   'storage.plugin',
 ] as const;
 
+/** Capabilities that would grant ambient access outside the mediated plugin host API. */
+export const pluginAmbientCapabilities = [
+  'network.outbound',
+  'filesystem.read',
+  'filesystem.write',
+  'process.spawn',
+] as const;
+
+/**
+ * Sandboxed WebAssembly receives no ambient imports. These are the only
+ * manifest capabilities that the current host can meaningfully mediate.
+ */
+export const sandboxSupportedCapabilities = pluginCapabilities.filter(
+  (capability) => !(pluginAmbientCapabilities as readonly string[]).includes(capability),
+) as Exclude<(typeof pluginCapabilities)[number], (typeof pluginAmbientCapabilities)[number]>[];
+
+const sandboxSupportedCapabilitySet = new Set<string>(sandboxSupportedCapabilities);
+
 const setting = z.discriminatedUnion('type', [
   z
     .object({ type: z.literal('string'), title: z.string().min(1), default: z.string().optional() })
@@ -171,6 +189,16 @@ export function validatePluginManifest(value: unknown): PluginManifest {
   }
   if (new Set(result.data.permissions).size !== result.data.permissions.length) {
     throw new PluginManifestError('permissions: duplicate capability');
+  }
+  if (result.data.runtime === 'sandboxed') {
+    const unsupported = result.data.permissions.filter(
+      (capability) => !sandboxSupportedCapabilitySet.has(capability),
+    );
+    if (unsupported.length > 0) {
+      throw new PluginManifestError(
+        `permissions: sandboxed plugins cannot request ambient capabilities: ${unsupported.join(', ')}`,
+      );
+    }
   }
   for (const [category, contributions] of Object.entries(result.data.contributes)) {
     const identifiers = contributions.map((item) => ('id' in item ? item.id : item.handler));

@@ -2,6 +2,12 @@ services:
   bareline:
     build: .
     restart: unless-stopped
+    stop_grace_period: 30s
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=64m
+    pids_limit: 256
+    mem_limit: 1g
     ports:
       - '3000:3000'
     volumes:

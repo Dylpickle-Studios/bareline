@@ -2,6 +2,7 @@ import type { AuditService } from '../audit/audit-service.js';
 import type { Database } from '../database/database.js';
 import type { GitRunner } from '../git/git-runner.js';
 import { inspectKey, SshKeyInputError } from '../ssh/ssh-key-service.js';
+import { OutboundPolicy, OutboundPolicyError } from '../security/outbound-policy.js';
 import { validateRef } from '../security/validation.js';
 import type { RepositoryService } from './repository-service.js';
 import type { Repository } from './repository-types.js';
@@ -21,6 +22,7 @@ export class RepositoryEnhancementService {
     private readonly repositories: RepositoryService,
     private readonly audit: AuditService,
     private readonly allowedMirrorHosts: readonly string[] = [],
+    private readonly outboundPolicy = new OutboundPolicy(),
   ) {}
 
   policies(repositoryId: number): RepositoryPolicy[] {
@@ -247,7 +249,7 @@ export class RepositoryEnhancementService {
     input: { direction: 'pull' | 'push'; remoteUrl: string; intervalMinutes: number },
   ): void {
     this.repositories.require(repository, actorUserId, 'admin');
-    const url = validateMirrorUrl(input.remoteUrl, this.allowedMirrorHosts);
+    const url = validateMirrorUrl(input.remoteUrl, this.allowedMirrorHosts, this.outboundPolicy);
     const interval = Math.min(Math.max(Math.trunc(input.intervalMinutes), 5), 10_080);
     const now = new Date();
     this.database
@@ -303,16 +305,30 @@ export class RepositoryEnhancementService {
     const path = await this.repositories.storagePath(repository);
     const now = new Date();
     try {
+      const remote = await this.outboundPolicy.assertSafeGitTarget(mirror.remoteUrl, {
+        allowedHosts: this.allowedMirrorHosts,
+      });
       if (mirror.direction === 'pull')
         await this.git.run([
+          '-c',
+          'http.followRedirects=false',
           '--git-dir',
           path,
           'fetch',
           '--prune',
-          mirror.remoteUrl,
+          remote,
           '+refs/*:refs/*',
         ]);
-      else await this.git.run(['--git-dir', path, 'push', '--mirror', mirror.remoteUrl]);
+      else
+        await this.git.run([
+          '-c',
+          'http.followRedirects=false',
+          '--git-dir',
+          path,
+          'push',
+          '--mirror',
+          remote,
+        ]);
       this.database
         .prepare(
           `UPDATE repository_mirrors SET last_run_at=?, last_success_at=?, last_error=NULL,
@@ -566,27 +582,17 @@ function refMatches(pattern: string, ref: string): boolean {
   return pattern.endsWith('*') ? ref.startsWith(pattern.slice(0, -1)) : pattern === ref;
 }
 
-function validateMirrorUrl(input: string, allowedHosts: readonly string[]): string {
-  const value = input.trim();
-  if (value.length > 2048 || /[\r\n\0]/.test(value))
-    throw new RepositoryEnhancementError('Invalid mirror URL');
-  const ssh = /^git@(?<host>[A-Za-z0-9.-]+):[A-Za-z0-9._/-]+(?:\.git)?$/.exec(value);
-  if (ssh?.groups?.host) {
-    if (!allowedHosts.includes(ssh.groups.host.toLowerCase()))
-      throw new RepositoryEnhancementError('Mirror host is not allowlisted');
-    return value;
-  }
-  let url: URL;
+function validateMirrorUrl(
+  input: string,
+  allowedHosts: readonly string[],
+  outboundPolicy: OutboundPolicy,
+): string {
   try {
-    url = new URL(value);
-  } catch {
-    throw new RepositoryEnhancementError('Mirror URL must use HTTPS or an SSH Git URL');
+    return outboundPolicy.validateGitTarget(input, { allowedHosts });
+  } catch (error) {
+    if (error instanceof OutboundPolicyError) throw new RepositoryEnhancementError(error.message);
+    throw new RepositoryEnhancementError('Invalid mirror URL');
   }
-  if (url.protocol !== 'https:' || url.username || url.password || !url.hostname)
-    throw new RepositoryEnhancementError('Mirror URL must use HTTPS without embedded credentials');
-  if (!allowedHosts.includes(url.hostname.toLowerCase()))
-    throw new RepositoryEnhancementError('Mirror host is not allowlisted');
-  return url.toString();
 }
 
 export class RepositoryEnhancementError extends Error {

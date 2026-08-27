@@ -196,6 +196,7 @@ export class PluginContributionService {
       return contributionViewSchema.parse(
         await this.sandbox.invokeJson(pluginId, handlerName('file_renderer', rendererId), context),
       );
+    this.requireExplicitTrustedEnablement(plugin);
     const module = (await import(
       `${pathToFileURL(await this.plugins.entrypoint(pluginId)).href}?v=${encodeURIComponent(plugin.version)}`
     )) as { fileRenderers?: Record<string, (value: unknown) => unknown> };
@@ -353,6 +354,7 @@ export class PluginContributionService {
       return contributionViewSchema.parse(
         await this.sandbox.invokeJson(pluginId, handlerName('admin_page', pageId), context),
       );
+    this.requireExplicitTrustedEnablement(plugin);
     const module = (await import(
       `${pathToFileURL(await this.plugins.entrypoint(pluginId)).href}?v=${encodeURIComponent(plugin.version)}`
     )) as { adminPages?: Record<string, (value: unknown) => unknown> };
@@ -379,6 +381,7 @@ export class PluginContributionService {
         }),
       );
     }
+    this.requireExplicitTrustedEnablement(plugin);
     const module = (await import(
       `${pathToFileURL(await this.plugins.entrypoint(pluginId)).href}?v=${encodeURIComponent(plugin.version)}`
     )) as {
@@ -411,6 +414,7 @@ export class PluginContributionService {
     const { plugin } = this.restEndpoint(pluginId, endpointId, method);
     if (plugin.runtime === 'sandboxed')
       return await this.sandbox.invokeJson(pluginId, handlerName('rest', endpointId), context);
+    this.requireExplicitTrustedEnablement(plugin);
     const module = (await import(
       `${pathToFileURL(await this.plugins.entrypoint(pluginId)).href}?v=${encodeURIComponent(plugin.version)}`
     )) as { restEndpoints?: Record<string, (value: unknown) => unknown> };
@@ -438,6 +442,7 @@ export class PluginContributionService {
       await this.sandbox.invokeJson(pluginId, handlerName('event', handlerId), { event, payload });
       return;
     }
+    this.requireExplicitTrustedEnablement(plugin);
     const module = (await import(
       `${pathToFileURL(await this.plugins.entrypoint(pluginId)).href}?v=${encodeURIComponent(plugin.version)}`
     )) as { events?: Record<string, (value: unknown) => unknown> };
@@ -495,6 +500,7 @@ export class PluginContributionService {
       );
       return contributionViewSchema.parse(response);
     }
+    this.requireExplicitTrustedEnablement(plugin);
     const module = (await import(
       `${pathToFileURL(await this.plugins.entrypoint(pluginId)).href}?v=${encodeURIComponent(plugin.version)}`
     )) as {
@@ -524,12 +530,27 @@ export class PluginContributionService {
     };
   }
 
+  /**
+   * PluginManager installs every plugin disabled and only allows trusted code
+   * to be enabled after an explicit risk acknowledgement. Keep that policy at
+   * the execution boundary too, so resolving a contribution cannot import
+   * trusted Node code while the plugin is disabled.
+   */
+  private requireExplicitTrustedEnablement(plugin: {
+    runtime: 'trusted' | 'sandboxed';
+    enabled: boolean;
+  }): void {
+    if (plugin.runtime === 'trusted' && !plugin.enabled)
+      throw new PluginPermissionError('Trusted plugin requires explicit enablement');
+  }
+
   private async runTrustedSearchProvider(
     pluginId: string,
     version: string,
     providerId: string,
     context: { query: string; user: { id: string; username: string } },
   ): Promise<unknown> {
+    this.requireExplicitTrustedEnablement(this.plugins.get(pluginId));
     const module = (await import(
       `${pathToFileURL(await this.plugins.entrypoint(pluginId)).href}?v=${encodeURIComponent(version)}`
     )) as { searchProviders?: Record<string, (value: unknown) => unknown> };
@@ -545,6 +566,7 @@ export class PluginContributionService {
     extensionId: string,
     context: unknown,
   ): Promise<unknown> {
+    this.requireExplicitTrustedEnablement(this.plugins.get(pluginId));
     const module = (await import(
       `${pathToFileURL(await this.plugins.entrypoint(pluginId)).href}?v=${encodeURIComponent(version)}`
     )) as { markdownExtensions?: Record<string, (value: unknown) => unknown> };
@@ -560,6 +582,7 @@ export class PluginContributionService {
     providerId: string,
     context: unknown,
   ): Promise<unknown> {
+    this.requireExplicitTrustedEnablement(this.plugins.get(pluginId));
     const module = (await import(
       `${pathToFileURL(await this.plugins.entrypoint(pluginId)).href}?v=${encodeURIComponent(version)}`
     )) as { authenticationProviders?: Record<string, (value: unknown) => unknown> };

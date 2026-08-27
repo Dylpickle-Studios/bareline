@@ -29,16 +29,21 @@ Git subprocesses, SQLite, imported roots, archive/upload parsing, and plugin run
   run as capability-limited WebAssembly in a separate disposable worker with no ambient host access.
 - **Unsafe deletion/races:** hosted repositories move atomically to delayed trash; mutations use
   database transactions and compare-and-swap reference updates.
-- **Mirrors and SSRF:** mirror URLs use HTTPS or the strict Git SSH form, reject embedded
-  credentials, and require an exact configured hostname allowlist.
+- **Mirrors and SSRF:** mirror, plugin, OIDC/LDAP, and backup URLs use HTTPS where applicable,
+  reject embedded credentials and redirects, require explicit host policy, resolve at connection
+  time, reject DNS rebinding and private/loopback/link-local/metadata/multicast/reserved addresses,
+  and remain subject to deployment egress controls.
 - **Branch-policy bypass:** web commits enforce matching policies before object creation. Git
   receive rejects force pushes/deletions conservatively and refuses transport pushes when an
   advanced policy cannot be proven without executable hooks.
-- **Off-site backups:** destination credentials use authenticated encryption and uploads use SigV4
-  over HTTPS. Optional archive encryption uses AES-256-GCM with a separate environment key.
+- **Off-site backups:** destination credentials use authenticated encryption and uploads use bounded
+  SigV4 over HTTPS. Manifests can be HMAC-authenticated with `security.masterKey`; optional archive
+  encryption uses AES-256-GCM with a separate environment key. Restore stages and rolls back target
+  swaps where possible.
 
 Residual risks include vulnerabilities in Git, SQLite/native addons, the WebAssembly engine, image
-decoders, and administrators deliberately enabling trusted code. Dependencies and base images require
-continuous security updates.
+decoders, and administrators deliberately enabling trusted code. Dependencies, base images, and
+GitHub Actions still require continuous updates and immutable deployment pinning. No independent
+security audit is represented by this repository's tests.
 
 The executable coverage mapping is maintained in [Security Test Matrix](security-test-matrix.md).

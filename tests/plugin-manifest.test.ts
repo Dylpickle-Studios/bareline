@@ -45,4 +45,18 @@ describe('plugin manifest', () => {
       }),
     ).toThrow();
   });
+
+  it('rejects ambient capabilities for sandboxed plugins', () => {
+    expect(() =>
+      validatePluginManifest({
+        id: 'example.ambient',
+        name: 'Ambient access',
+        version: '1.0.0',
+        apiVersion: 1,
+        runtime: 'sandboxed',
+        entrypoint: 'plugin.wasm',
+        permissions: ['network.outbound'],
+      }),
+    ).toThrow(/ambient capabilities/);
+  });
 });

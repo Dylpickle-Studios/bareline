@@ -17,18 +17,42 @@ host filesystem. Working-tree imports are browse-only for server writes.
 
 ## Backups
 
-Run `bareline backup --output /backup/bareline-YYYYMMDD --config config.yml`. The command uses
+Set `security.masterKey` before creating production backups. It authenticates the manifest as well
+as protecting encrypted plugin/provider and destination credentials. Stop Bareline, or provide an
+equivalent quiesce/maintenance window, before running:
+
+```sh
+bareline backup --output /backup/bareline-YYYYMMDD --config config.yml
+bareline restore-verify --input /backup/bareline-YYYYMMDD --config config.yml
+```
+
+The command stages the backup outside the destination and publishes it with one rename. It uses
 SQLite's online backup API and copies hosted repositories, repository trash, LFS, configuration,
 installed plugin packages, plugin trash, and database-backed plugin data without following
-symlinks. It writes a SHA-256 manifest last. Imported bare and working-tree repositories remain in
-their administrator-managed roots; the manifest inventories their logical names and paths, and the
-operator must snapshot those roots separately. Copy every part to a different failure domain.
+symlinks. It writes a SHA-256 file manifest and an HMAC-SHA-256 manifest authentication value last.
+Imported bare and working-tree repositories remain in their administrator-managed roots; the
+manifest inventories their logical names and paths, and the operator must snapshot those roots
+separately. Copy every part to a different failure domain.
 
 Filesystem snapshots are safe when the filesystem provides a consistent point-in-time view across
 the database and Git/LFS roots. Otherwise use the built-in command. Never copy a live SQLite file
 with an ordinary file copy while writes continue.
 
 ## Restoring backups
+
+`restore-verify` validates the file list, SHA-256 checksums, and (when `security.masterKey` is
+configured) the manifest HMAC. Restore is intentionally a stopped-service operation:
+
+```sh
+bareline restore --input /backup/bareline-YYYYMMDD \
+  --config config.yml --confirm-replace
+```
+
+Restore stages every target and checks that the swaps are on compatible filesystems before moving
+current data into a timestamped `pre-restore-*` recovery directory. A failed swap rolls back the
+active targets where possible. Keep the recovery directory until the application has passed login,
+private browsing, clone, push, LFS download, and search checks. The backup's `config.yml` is saved
+as `restored-config.yml` in that recovery directory; it is not silently made active.
 
 ## Encrypted S3-compatible destinations
 
@@ -40,20 +64,26 @@ credentials are never accepted as command-line arguments. Set `BARELINE_BACKUP_A
 bareline backup destination-add --actor-id 1 --name offsite \
   --endpoint https://s3.example.net --region eu-west-1 --bucket bareline --config config.yml
 bareline backup destination-list --config config.yml
-bareline backup upload --destination-id 1 --file /backup/bareline.tar.zst \
-  --object-name bareline-2026-08-24.tar.zst --config config.yml
 ```
 
-The upload uses AWS Signature Version 4 and HTTPS. To encrypt a backup archive before upload, set a
-separate 32-byte base64url `BARELINE_BACKUP_ENCRYPTION_KEY` and add
+`backup create` produces a directory, while `backup upload --file` accepts a regular file only; the
+CLI does not implicitly archive a directory. If the off-site system requires one object, create an
+archive with an approved, symlink-safe archival tool, then upload that file:
+
+```sh
+tar --sort=name --owner=0 --group=0 --numeric-owner \
+  -C /backup -czf /safe/staging/bareline-2026-08-24.tar.gz bareline-2026-08-24
+bareline backup upload --destination-id 1 --file /safe/staging/bareline-2026-08-24.tar.gz \
+  --object-name bareline-2026-08-24.tar.gz --config config.yml
+```
+
+After retrieval, inspect and extract the archive into a new directory, run `restore-verify` on that
+directory, and only then run `restore`. The upload uses AWS Signature Version 4 and HTTPS. To encrypt
+the archive before upload, set `BARELINE_BACKUP_ENCRYPTION_KEY` and add
 `--encrypted-output /safe/staging/backup.enc`. Bareline writes a versioned AES-256-GCM envelope and
 uploads that file. Keep this key outside both the Bareline host and destination; losing it makes the
-archive unrecoverable. Endpoint URLs with credentials or non-HTTPS schemes are rejected.
-
-Verify first with `bareline restore-verify --input BACKUP`. Stop the application, then run
-`bareline restore --input BACKUP --confirm-replace`. Restore refuses to proceed without explicit
-confirmation and moves existing data into a timestamped pre-restore directory. Start the server and
-test login, private browsing, clone, push, LFS download, and search. Rebuild search when necessary.
+archive unrecoverable. Endpoint URLs with credentials, non-HTTPS schemes, redirects, and private or
+reserved resolved addresses are rejected. A network egress policy is still required.
 
 ## Search index
 

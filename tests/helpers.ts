@@ -28,6 +28,9 @@ export function temporaryConfig(): AppConfig {
     limits: {
       filePreviewBytes: 2 * 1024 * 1024,
       gitOutputBytes: 16 * 1024 * 1024,
+      gitInputBytes: 64 * 1024 * 1024,
+      gitConcurrent: 8,
+      gitPending: 32,
       diffBytes: 10 * 1024 * 1024,
       diffLines: 20_000,
       diffFiles: 500,

@@ -15,14 +15,11 @@ features will not become core abstractions.
 
 ## Current development status
 
-Bareline 1.0 is released. Every item on the pre-1.0 acceptance checklist in
-[docs/production-readiness.md](docs/production-readiness.md) is complete: validated YAML
-configuration, versioned SQLite migrations, Argon2id accounts, secure sessions and CSRF protection,
-centralized repository permissions, opaque bare-repository storage, repository browsing,
-commits/diffs/refs, Smart HTTP clone/fetch/push plumbing, scoped hashed tokens, an OpenSSH
-forced-command boundary, immutable audit records, responsive server-rendered UI, LFS, plugins,
-backups, and real-Git integration/security/Playwright/API tests, a non-root Docker image, and a
-self-contained standalone bundle.
+Bareline is under active development. The core server and its security hardening are covered by
+automated unit, integration, fuzz, and release-smoke checks. Production approval still requires the
+external controls listed in [docs/production-readiness.md](docs/production-readiness.md), especially
+an independent security audit, deployment egress policy, representative backup/restore drill, and
+immutable artifact verification.
 
 Semantic versioning applies from 1.0 onward; see [CHANGELOG.md](CHANGELOG.md) for release notes.
 
@@ -35,8 +32,8 @@ secret with **Pages: write** and **Administration: write** permissions; the work
 site on its first run. The standard repository `GITHUB_TOKEN` cannot create a Pages site.
 
 The `Publish container image` workflow publishes `ghcr.io/OWNER/REPOSITORY` from `main` and `v*`
-tags. It attaches build provenance and an SBOM. Pull a specific tagged release rather than relying
-on `latest` for production deployments.
+tags. It attaches build provenance, an SBOM, and a signature. Verify the immutable image digest and
+those attestations before production deployment; tags and `latest` are not deployment identifiers.
 
 ## Development
 
@@ -44,7 +41,9 @@ Requirements: Node.js 24 LTS, npm 11, Git 2.40 or newer, and a C++ toolchain if 
 Argon2 package is unavailable.
 
 ```bash
-npm install
+npm ci --ignore-scripts
+npm run supply-chain:check
+npm run rebuild:native
 cp config.example.yml config.yml
 npm run check
 npm run dev
@@ -65,8 +64,8 @@ git clone http://alice:TOKEN@localhost:3000/alice/example.git
 
 Repositories and plugins are hostile input. Git is invoked without a shell, repository paths are
 resolved from opaque database records, resource-heavy operations are bounded, and unauthorized
-private repositories use non-disclosing responses. See [SECURITY.md](SECURITY.md) and
-[docs/threat-model.md](docs/threat-model.md).
+private repositories use non-disclosing responses. See [SECURITY.md](SECURITY.md),
+[docs/threat-model.md](docs/threat-model.md), and [docs/security-assurance.md](docs/security-assurance.md).
 
 ## License
 

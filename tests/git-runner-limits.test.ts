@@ -1,3 +1,6 @@
+import { chmod, mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { GitRunner } from '../src/git/git-runner.js';
 
@@ -27,5 +30,27 @@ describe('Git runner output protection', () => {
     await expect(runner.run(['config', '--get', 'protocol.ext.allow'])).resolves.toMatchObject({
       stdout: Buffer.from('never\n'),
     });
+  });
+
+  it('rejects oversized stdin before spawning Git', async () => {
+    const runner = new GitRunner('git', 5000, 4096, { maxInputBytes: 4 });
+    await expect(
+      runner.run(['hash-object', '--stdin'], { input: Buffer.from('12345') }),
+    ).rejects.toThrow(/input limit/);
+  });
+
+  it('bounds concurrent Git children and pending work', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'focused-git-runner-'));
+    const executable = join(root, 'fake-git');
+    await writeFile(executable, '#!/bin/sh\nsleep 0.2\n', 'utf8');
+    await chmod(executable, 0o755);
+    const runner = new GitRunner(executable, 5000, 4096, {
+      maxConcurrent: 1,
+      maxPending: 0,
+    });
+    const first = runner.run([]);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    await expect(runner.run([])).rejects.toThrow(/concurrency limit/);
+    await expect(first).resolves.toMatchObject({ exitCode: 0 });
   });
 });

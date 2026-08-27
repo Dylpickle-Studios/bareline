@@ -20,12 +20,15 @@
     "format:check": "prettier --check .",
     "format": "prettier --write .",
     "test": "vitest run",
+    "test:fuzz": "vitest run tests/fuzz",
     "test:e2e": "playwright test",
     "test:watch": "vitest",
     "check": "npm run typecheck && npm run lint && npm test && npm run build",
     "release:bundle": "npm run build && node scripts/build-release.mjs",
     "smoke:release": "node scripts/smoke-release.mjs",
-    "smoke:docker": "node scripts/smoke-docker.mjs"
+    "smoke:docker": "node scripts/smoke-docker.mjs",
+    "rebuild:native": "npm rebuild argon2 better-sqlite3 esbuild --foreground-scripts --no-audit --no-fund",
+    "supply-chain:check": "node scripts/verify-supply-chain.mjs"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",

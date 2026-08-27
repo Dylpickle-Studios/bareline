@@ -45,11 +45,13 @@ local LFS store. Enable LFS in configuration, install `git-lfs`, then use `git l
 
 ## Backups and restore
 
-Run `bareline backup --output /safe/backup --config config.yml`. The backup includes an online
-SQLite snapshot, configuration, plugins, repositories, and LFS data with a checksum manifest.
-Verify and copy backups off-host. Restore requires `--confirm-replace`; existing data is first moved
-to a recoverable pre-restore directory. Filesystem snapshots must capture SQLite and repository
-storage consistently and must not follow untrusted symlinks.
+Set a 32-byte base64url `security.masterKey` for production, then stop the service and run
+`bareline backup --output /safe/backup --config config.yml`. The backup includes an online SQLite
+snapshot, configuration, plugins, repositories, trash, and LFS data with checksums and an authenticated
+manifest. Run `bareline restore-verify --input /safe/backup --config config.yml`, copy verified backups
+off-host, and restore only while stopped with `--confirm-replace`; existing data is first moved to a
+recoverable pre-restore directory. Filesystem snapshots must capture SQLite and repository storage
+consistently and must not follow untrusted symlinks.
 
 Repository administrators can protect branches, add read-only deploy keys, configure allowlisted
 mirrors, and mark repositories as templates under **Repository settings**. Your home page keeps a

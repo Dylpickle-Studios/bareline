@@ -1,7 +1,8 @@
-FROM node:24-bookworm-slim AS build
+FROM node:24-bookworm-slim@sha256:a9f5f7c91a432850b2a8a7797adf5eadb6c733ceed61167806cee7ea7fbc29df AS build
 WORKDIR /build
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm ci --ignore-scripts --no-audit --no-fund \
+    && npm rebuild argon2 better-sqlite3 esbuild --foreground-scripts --no-audit --no-fund
 COPY tsconfig.json tsconfig.build.json eslint.config.js .prettierrc.json ./
 COPY scripts ./scripts
 COPY src ./src
@@ -9,7 +10,7 @@ COPY docs ./docs
 COPY plugins ./plugins
 RUN npm run build && npm prune --omit=dev
 
-FROM node:24-bookworm-slim AS runtime
+FROM node:24-bookworm-slim@sha256:a9f5f7c91a432850b2a8a7797adf5eadb6c733ceed61167806cee7ea7fbc29df AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends git openssh-client ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --system --gid 10001 bareline \

@@ -1,5 +1,7 @@
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { chmod, cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { readdir, stat } from 'node:fs/promises';
 import { arch, platform } from 'node:os';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
@@ -46,4 +48,25 @@ await promisify(execFile)(
     cwd: target,
   },
 );
+const releaseFiles = await filesUnder(target);
+const checksums = [];
+for (const file of releaseFiles) {
+  const relative = file.slice(target.length + 1);
+  if (relative === 'SHA256SUMS') continue;
+  const digest = createHash('sha256')
+    .update(await readFile(file))
+    .digest('hex');
+  checksums.push(`${digest}  ${relative}`);
+}
+await writeFile(join(target, 'SHA256SUMS'), `${checksums.sort().join('\n')}\n`);
 process.stdout.write(`${target}\n`);
+
+async function filesUnder(directory) {
+  const result = [];
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) result.push(...(await filesUnder(path)));
+    else if ((await stat(path)).isFile()) result.push(path);
+  }
+  return result;
+}

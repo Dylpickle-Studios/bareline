@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import type { AppConfig } from '../config/config.js';
 import type { Database } from '../database/database.js';
 import { ManagedProcess, controlledGitEnvironment, gitSafetyArguments } from '../git/git-runner.js';
+import { gitTransportLimiter } from '../security/process-limits.js';
 import type { RepositoryService } from '../repositories/repository-service.js';
 
 export interface AuthorizedSshCommand {
@@ -97,53 +98,64 @@ export async function executeSshCommand(
   command: AuthorizedSshCommand,
 ): Promise<number> {
   if (!config.ssh.enabled) throw new SshAuthorizationError();
-  return await new Promise<number>((resolve, reject) => {
-    const child = spawn(
-      config.git.executable,
-      [...gitSafetyArguments, command.operation.replace('git-', ''), command.repositoryPath],
-      {
-        shell: false,
-        stdio: ['pipe', 'pipe', 'pipe'],
-        env: controlledGitEnvironment(),
-      },
-    );
-    const transferLimit = config.limits.archiveBytes;
-    let inputBytes = 0;
-    let outputBytes = 0;
+  const releaseTransport = await gitTransportLimiter.acquire();
+  try {
+    return await new Promise<number>((resolve, reject) => {
+      const child = spawn(
+        config.git.executable,
+        [...gitSafetyArguments, command.operation.replace('git-', ''), command.repositoryPath],
+        {
+          shell: false,
+          detached: process.platform !== 'win32',
+          stdio: ['pipe', 'pipe', 'pipe'],
+          env: controlledGitEnvironment(),
+        },
+      );
+      const transferLimit = config.limits.archiveBytes;
+      let inputBytes = 0;
+      let outputBytes = 0;
 
-    const proc = new ManagedProcess(child, {
-      timeoutMs: Math.max(config.git.timeoutMs, 120_000),
-      onTimeout: () => new Error('SSH Git transfer exceeded its time limit'),
-      onSettle: (error) => {
-        process.stdin.unpipe(child.stdin);
-        if (error) reject(error);
-      },
+      const onInput = (chunk: Buffer | string): void => {
+        inputBytes += typeof chunk === 'string' ? Buffer.byteLength(chunk) : chunk.length;
+        if (inputBytes > transferLimit)
+          proc.terminate(new Error('SSH Git input exceeded transfer limit'));
+      };
+      const proc = new ManagedProcess(child, {
+        timeoutMs: Math.max(config.git.timeoutMs, 120_000),
+        onTimeout: () => new Error('SSH Git transfer exceeded its time limit'),
+        killProcessGroup: process.platform !== 'win32',
+        onSettle: (error) => {
+          process.stdin.unpipe(child.stdin);
+          process.stdin.removeListener('data', onInput);
+          releaseTransport();
+          if (error) reject(error);
+        },
+      });
+      proc.cancelOn(process, 'SIGTERM', new Error('SSH Git transfer was cancelled'));
+      proc.cancelOn(process, 'SIGINT', new Error('SSH Git transfer was cancelled'));
+      process.stdin.on('data', onInput);
+      child.stdout.on('data', (chunk: Buffer) => {
+        outputBytes += chunk.length;
+        if (outputBytes > transferLimit) {
+          proc.terminate(new Error('SSH Git output exceeded transfer limit'));
+          return;
+        }
+        process.stdout.write(chunk);
+      });
+      child.stderr.pipe(process.stderr, { end: false });
+      process.stdin.pipe(child.stdin);
+      child.on('error', () => {
+        proc.settle(new Error('Unable to start SSH Git operation'));
+      });
+      child.on('close', (code) => {
+        proc.settle();
+        resolve(code ?? 1);
+      });
     });
-    proc.cancelOn(process, 'SIGTERM', new Error('SSH Git transfer was cancelled'));
-    proc.cancelOn(process, 'SIGINT', new Error('SSH Git transfer was cancelled'));
-    process.stdin.on('data', (chunk: Buffer | string) => {
-      inputBytes += typeof chunk === 'string' ? Buffer.byteLength(chunk) : chunk.length;
-      if (inputBytes > transferLimit)
-        proc.terminate(new Error('SSH Git input exceeded transfer limit'));
-    });
-    child.stdout.on('data', (chunk: Buffer) => {
-      outputBytes += chunk.length;
-      if (outputBytes > transferLimit) {
-        proc.terminate(new Error('SSH Git output exceeded transfer limit'));
-        return;
-      }
-      process.stdout.write(chunk);
-    });
-    child.stderr.pipe(process.stderr, { end: false });
-    process.stdin.pipe(child.stdin);
-    child.on('error', () => {
-      proc.settle(new Error('Unable to start SSH Git operation'));
-    });
-    child.on('close', (code) => {
-      proc.settle();
-      resolve(code ?? 1);
-    });
-  });
+  } catch (error) {
+    releaseTransport();
+    throw error;
+  }
 }
 
 export function authorizedKeys(database: Database, executable: string, configFile: string): string {

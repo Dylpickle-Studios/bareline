@@ -3,6 +3,7 @@ import type { Readable } from 'node:stream';
 import type { FastifyReply } from 'fastify';
 import type { AppConfig } from '../config/config.js';
 import { ManagedProcess, controlledGitEnvironment, gitSafetyArguments } from '../git/git-runner.js';
+import { gitTransportLimiter } from '../security/process-limits.js';
 
 const allowedServices = new Set(['git-upload-pack', 'git-receive-pack']);
 
@@ -39,20 +40,30 @@ export async function serveSmartHttp(
     throw new SmartHttpInputError(413);
   }
   const query = service ? `service=${encodeURIComponent(service)}` : '';
-  const child = spawn(config.git.executable, [...gitSafetyArguments, 'http-backend'], {
-    shell: false,
-    stdio: ['pipe', 'pipe', 'pipe'],
-    env: controlledGitEnvironment({
-      GIT_HTTP_EXPORT_ALL: '1',
-      GIT_PROJECT_ROOT: repositoryRoot,
-      PATH_INFO: `/${repositoryName}/${request.pathSuffix}`,
-      QUERY_STRING: query,
-      REQUEST_METHOD: request.method,
-      CONTENT_TYPE: request.contentType ?? '',
-      CONTENT_LENGTH: request.contentLength ?? '',
-      ...(request.authenticatedUserId ? { REMOTE_USER: String(request.authenticatedUserId) } : {}),
-    }),
-  });
+  const releaseTransport = await gitTransportLimiter.acquire();
+  let child;
+  try {
+    child = spawn(config.git.executable, [...gitSafetyArguments, 'http-backend'], {
+      shell: false,
+      detached: process.platform !== 'win32',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: controlledGitEnvironment({
+        GIT_HTTP_EXPORT_ALL: '1',
+        GIT_PROJECT_ROOT: repositoryRoot,
+        PATH_INFO: `/${repositoryName}/${request.pathSuffix}`,
+        QUERY_STRING: query,
+        REQUEST_METHOD: request.method,
+        CONTENT_TYPE: request.contentType ?? '',
+        CONTENT_LENGTH: request.contentLength ?? '',
+        ...(request.authenticatedUserId
+          ? { REMOTE_USER: String(request.authenticatedUserId) }
+          : {}),
+      }),
+    });
+  } catch (error) {
+    releaseTransport();
+    throw error;
+  }
 
   let headerBuffer = Buffer.alloc(0);
   let headersSent = false;
@@ -65,7 +76,9 @@ export async function serveSmartHttp(
     const proc = new ManagedProcess(child, {
       timeoutMs: Math.max(config.git.timeoutMs, 120_000),
       onTimeout: () => new Error('Git HTTP transfer exceeded its time limit'),
+      killProcessGroup: process.platform !== 'win32',
       onSettle: (error) => {
+        releaseTransport();
         if (error) reject(error);
       },
     });

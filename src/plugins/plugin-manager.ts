@@ -18,6 +18,7 @@ import type { AuditService } from '../audit/audit-service.js';
 import type { AppConfig } from '../config/config.js';
 import type { Database } from '../database/database.js';
 import { SecretBox } from '../security/secret-box.js';
+import { OutboundPolicy, OutboundPolicyError } from '../security/outbound-policy.js';
 import { type PluginManifest, pluginCapabilities, validatePluginManifest } from './manifest.js';
 import { extractPluginArchive } from './package-archive.js';
 import { validateRef } from '../security/validation.js';
@@ -33,6 +34,7 @@ export interface PluginView {
   sourceValue: string;
   enabled: boolean;
   error: string | null;
+  packageDigest: string | null;
   permissions: { capability: string; requested: boolean; granted: boolean }[];
   manifest: PluginManifest;
 }
@@ -42,6 +44,7 @@ export class PluginManager {
     private readonly database: Database,
     private readonly config: AppConfig,
     private readonly audit: AuditService,
+    private readonly outboundPolicy = new OutboundPolicy(),
   ) {}
 
   async installLocal(
@@ -77,6 +80,7 @@ export class PluginManager {
     if (await pathExists(destination))
       throw new PluginInstallError('This plugin version is already installed');
     await copyPackage(source, destination);
+    const digest = await packageDigest(destination);
     const now = new Date().toISOString();
     const existing = this.database
       .prepare('SELECT manifest_json FROM plugins WHERE id = ?')
@@ -90,13 +94,14 @@ export class PluginManager {
           `
           INSERT INTO plugins
             (id, name, version, api_version, runtime, source_type, source_value, package_path,
-             manifest_json, enabled, installed_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+            manifest_json, package_digest, enabled, installed_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
           ON CONFLICT(id) DO UPDATE SET
             name = excluded.name, version = excluded.version, api_version = excluded.api_version,
             runtime = excluded.runtime, source_type = excluded.source_type,
             source_value = excluded.source_value, package_path = excluded.package_path,
-            manifest_json = excluded.manifest_json, enabled = 0, error = NULL,
+            manifest_json = excluded.manifest_json, package_digest = excluded.package_digest,
+            enabled = 0, error = NULL,
             updated_at = excluded.updated_at
         `,
         )
@@ -110,6 +115,7 @@ export class PluginManager {
           options.sourceValue ?? source,
           destination,
           JSON.stringify(manifest),
+          digest,
           now,
           now,
         );
@@ -121,7 +127,7 @@ export class PluginManager {
               `
               INSERT INTO plugin_permissions(plugin_id, capability, requested, granted)
               VALUES (?, ?, 1, 0)
-              ON CONFLICT(plugin_id, capability) DO UPDATE SET requested = 1
+              ON CONFLICT(plugin_id, capability) DO UPDATE SET requested = 1, granted = 0
             `,
             )
             .run(manifest.id, capability);
@@ -181,17 +187,15 @@ export class PluginManager {
     this.requireAdministrator(actorUserId);
     let remote: URL;
     try {
-      remote = new URL(remoteInput);
-    } catch {
+      remote = await this.outboundPolicy.assertSafeUrl(remoteInput, {
+        allowedHosts: this.config.plugins.allowedGitHosts,
+        protocols: ['https:'],
+        ports: [443],
+      });
+    } catch (error) {
+      if (error instanceof OutboundPolicyError) throw new PluginInstallError(error.message);
       throw new PluginInstallError('Git plugin source must be a valid HTTPS URL');
     }
-    if (remote.username || remote.password)
-      throw new PluginInstallError('Git plugin source URL must not contain credentials');
-    if (
-      remote.protocol !== 'https:' ||
-      !this.config.plugins.allowedGitHosts.includes(remote.hostname.toLowerCase())
-    )
-      throw new PluginInstallError('Git plugin source host is not allowlisted');
     const ref = validateRef(refInput || 'main');
     const stagingRoot = join(this.config.storage.data, 'plugin-staging');
     await mkdir(stagingRoot, { recursive: true, mode: 0o750 });
@@ -205,6 +209,8 @@ export class PluginManager {
           'protocol.file.allow=never',
           '-c',
           'protocol.ext.allow=never',
+          '-c',
+          'http.followRedirects=false',
           '-c',
           'core.hooksPath=/dev/null',
           'clone',
@@ -222,11 +228,24 @@ export class PluginManager {
           env: safeInstallEnvironment(),
         },
       );
+      const commit = (
+        await runFile(
+          this.config.git.executable,
+          ['-C', checkout, 'rev-parse', '--verify', 'HEAD'],
+          {
+            timeout: this.config.plugins.installTimeoutMs,
+            maxBuffer: 4096,
+            env: safeInstallEnvironment(),
+          },
+        )
+      ).stdout.trim();
+      if (!/^[a-f0-9]{40,64}$/i.test(commit))
+        throw new PluginInstallError('Git plugin checkout did not resolve to an immutable commit');
       await rm(join(checkout, '.git'), { recursive: true, force: true });
       return await this.installLocal(actorUserId, checkout, {
         trustedRiskAccepted: options.trustedRiskAccepted,
         sourceType: 'git',
-        sourceValue: `${remote.href}#${ref}`,
+        sourceValue: `${remote.href}#${commit}`,
       });
     } catch (error) {
       if (error instanceof PluginInstallError) throw error;
@@ -247,9 +266,10 @@ export class PluginManager {
         packageInput,
       );
     const packageName = match?.[1];
-    if (!packageName || !this.config.plugins.allowedNpmPackages.includes(packageName))
+    const version = match?.[2];
+    if (!packageName || !version || !this.config.plugins.allowedNpmPackages.includes(packageName))
       throw new PluginInstallError('npm plugin package is not allowlisted');
-    const specification = match[2] ? `${packageName}@${match[2]}` : packageName;
+    const specification = `${packageName}@${version}`;
     const stagingRoot = join(this.config.storage.data, 'plugin-staging');
     await mkdir(stagingRoot, { recursive: true, mode: 0o750 });
     const staging = await mkdtemp(join(stagingRoot, 'npm-'));
@@ -536,7 +556,8 @@ export class PluginManager {
     const row = this.database
       .prepare(
         `
-        SELECT id, name, version, runtime, source_type, source_value, enabled, error, manifest_json
+        SELECT id, name, version, runtime, source_type, source_value, enabled, error,
+               package_digest AS packageDigest, manifest_json
         FROM plugins WHERE id = ?
       `,
       )
@@ -550,6 +571,7 @@ export class PluginManager {
           source_value: string;
           enabled: number;
           error: string | null;
+          packageDigest: string | null;
           manifest_json: string;
         }
       | undefined;
@@ -568,6 +590,7 @@ export class PluginManager {
       sourceValue: row.source_value,
       enabled: row.enabled === 1,
       error: row.error,
+      packageDigest: row.packageDigest,
       manifest: validatePluginManifest(JSON.parse(row.manifest_json) as unknown),
       permissions: permissions.map((permission) => ({
         capability: permission.capability,

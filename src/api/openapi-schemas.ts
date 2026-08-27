@@ -328,6 +328,7 @@ export const pluginResponse = object({
   runtime: { type: 'string', enum: ['trusted', 'sandboxed'] },
   sourceType: string,
   sourceValue: string,
+  packageDigest: nullableString,
   enabled: boolean,
   error: nullableString,
   permissions: array(pluginPermissionResponse),
