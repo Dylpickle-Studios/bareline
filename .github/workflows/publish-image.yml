@@ -52,4 +52,6 @@ jobs:
         env:
           IMAGE: ghcr.io/${{ github.repository }}
           DIGEST: ${{ steps.build.outputs.digest }}
-        run: cosign sign --yes "${IMAGE}@${DIGEST}"
+        run: |
+          IMAGE_LOWER="${IMAGE,,}"
+          cosign sign --yes "${IMAGE_LOWER}@${DIGEST}"
