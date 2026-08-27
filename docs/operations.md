@@ -102,5 +102,7 @@ records a second audit event. External imported repositories are never removed b
 
 Start with `bareline doctor`, `bareline config check`, and `git --version`. Check filesystem
 ownership, free space, SQLite integrity, certificate readability, public URL, proxy reachability,
-and OpenSSH forced-command output. Use the request ID from an error page to find the structured log
-entry. Logs deliberately omit passwords, cookies, raw tokens, keys, and repository contents.
+and OpenSSH forced-command output. Use the request ID from an error page or response `x-request-id`
+to find the structured log entry; the application generates this value and does not trust a
+client-supplied correlation header. Logs deliberately omit passwords, cookies, raw tokens, keys, and
+repository contents.

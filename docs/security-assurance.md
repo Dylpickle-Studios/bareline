@@ -8,10 +8,12 @@ the following controls:
 
 - `npm ci --ignore-scripts`, `npm run supply-chain:check`, the explicit native rebuild, type checking,
   lint, unit/integration tests, parser fuzzing, browser tests, `npm audit --omit=dev`, release smoke,
-  and container smoke all pass from a clean checkout.
-- The release bundle's `SHA256SUMS` file is checked against the bundle received by the operator. The
-  container is published with an SBOM, SLSA provenance attestation, and a keyless signature over its
-  immutable image digest.
+  and container smoke all pass from a clean checkout. CodeQL must report no unresolved blocking
+  findings.
+- The release bundle's SHA-256 sidecar, signed archive, and signed SPDX SBOM are verified against the
+  release workflow identity; `npm run release:verify` checks the extracted bundle's file list and
+  hashes. The container is published with signed SPDX SBOM and SLSA provenance attestations plus a
+  keyless signature over its immutable image digest.
 - A backup is created from a quiesced service, verified, restored into an isolated data root, and
   exercised with login, private-repository browsing, clone, push, LFS, search rebuild, and plugin
   validation. Imported repositories and external backup destinations are tested separately.

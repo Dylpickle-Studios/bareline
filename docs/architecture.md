@@ -16,8 +16,10 @@ active and pending concurrency limits, and detached process groups are terminate
 timeout.
 
 The HTTP surface is registered through focused route modules under `src/app/routes/` with a typed
-application context. Request, Git, plugin, backup, and queue metrics are bounded and exposed through
-trusted `/metrics`; `/livez` and `/readyz` serve separate orchestration purposes.
+application context. REST routes are split by repository management/content, account, and
+administration/plugin responsibility; each module receives the same narrow context instead of
+reaching into app construction. Request, Git, plugin, backup, and queue metrics are bounded and
+exposed through trusted `/metrics`; `/livez` and `/readyz` serve separate orchestration purposes.
 
 Repository enhancements remain metadata around Git rather than alternate representations of Git
 objects. A minute worker processes bounded batches of due mirrors; remote hosts require an explicit

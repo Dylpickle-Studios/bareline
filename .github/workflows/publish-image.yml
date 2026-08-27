@@ -21,6 +21,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run supply-chain:check
+      - name: Generate dependency SBOM
+        run: npm sbom --omit=dev --sbom-format=spdx --sbom-type=application > "$RUNNER_TEMP/bareline.spdx.json"
       - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
@@ -55,3 +63,63 @@ jobs:
         run: |
           IMAGE_LOWER="${IMAGE,,}"
           cosign sign --yes "${IMAGE_LOWER}@${DIGEST}"
+      - name: Create signed provenance predicate
+        env:
+          PROVENANCE: ${{ runner.temp }}/bareline.provenance.json
+        run: |
+          export PROVENANCE GITHUB_REPOSITORY GITHUB_REF GITHUB_SHA GITHUB_RUN_ID
+          node --input-type=module <<'NODE'
+          import { writeFileSync } from 'node:fs';
+
+          const repository = process.env.GITHUB_REPOSITORY;
+          const ref = process.env.GITHUB_REF;
+          const sha = process.env.GITHUB_SHA;
+          writeFileSync(
+            process.env.PROVENANCE,
+            `${JSON.stringify(
+              {
+                buildDefinition: {
+                  buildType: 'https://github.com/Attestations/GitHubActions@v1',
+                  externalParameters: {
+                    workflow: { path: '.github/workflows/publish-image.yml', ref },
+                  },
+                  resolvedDependencies: [
+                    {
+                      uri: `git+https://github.com/${repository}.git`,
+                      digest: { sha1: sha },
+                    },
+                  ],
+                },
+                runDetails: {
+                  builder: { id: 'https://github.com/actions/runner' },
+                  metadata: { invocationId: `${repository}/${process.env.GITHUB_RUN_ID}` },
+                },
+              },
+              null,
+              2,
+            )}\n`,
+          );
+          NODE
+      - name: Sign SBOM and provenance attestations
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          PROVENANCE: ${{ runner.temp }}/bareline.provenance.json
+        run: |
+          IMAGE_LOWER="${IMAGE,,}"
+          cosign attest --yes --type spdxjson --predicate "$RUNNER_TEMP/bareline.spdx.json" "${IMAGE_LOWER}@${DIGEST}"
+          cosign attest --yes --type slsaprovenance1 --predicate "$PROVENANCE" "${IMAGE_LOWER}@${DIGEST}"
+      - name: Verify image signature and attestations
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          IMAGE_LOWER="${IMAGE,,}"
+          CERTIFICATE_IDENTITY="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/publish-image.yml@${GITHUB_REF}"
+          VERIFY_ARGS=(
+            --certificate-identity "$CERTIFICATE_IDENTITY"
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
+          )
+          cosign verify "${VERIFY_ARGS[@]}" "${IMAGE_LOWER}@${DIGEST}"
+          cosign verify-attestation "${VERIFY_ARGS[@]}" --type spdxjson "${IMAGE_LOWER}@${DIGEST}"
+          cosign verify-attestation "${VERIFY_ARGS[@]}" --type slsaprovenance1 "${IMAGE_LOWER}@${DIGEST}"

@@ -1,0 +1,78 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: npm
+      - name: Confirm tag matches package version
+        run: test "$GITHUB_REF_NAME" = "v$(node -p "require('./package.json').version")"
+      - run: npm ci --ignore-scripts
+      - run: npm run supply-chain:check
+      - run: npm run rebuild:native
+      - run: npm run check
+      - run: npm run test:fuzz
+      - run: npm run format:check
+      - run: npm audit --omit=dev
+      - run: npm run release:bundle
+      - run: npm run release:verify
+      - id: bundle
+        name: Locate release bundle
+        run: |
+          BUNDLE="release/bareline-$(node -p "require('./package.json').version")-$(node -p "process.platform")-$(node -p "process.arch")"
+          test -d "$BUNDLE"
+          echo "path=$BUNDLE" >> "$GITHUB_OUTPUT"
+          echo "name=$(basename "$BUNDLE")" >> "$GITHUB_OUTPUT"
+      - uses: sigstore/cosign-installer@d7d6bc7722e3daa8354c50bcb52f4837da5e9b6a # v3.8.1
+      - name: Package and sign release artifacts
+        id: artifacts
+        env:
+          BUNDLE: ${{ steps.bundle.outputs.path }}
+        run: |
+          ARCHIVE="${BUNDLE}.tar.gz"
+          SBOM_ASSET="release/bareline-${GITHUB_REF_NAME}.SBOM.spdx.json"
+          (cd release && tar -czf "$(basename "$ARCHIVE")" "$(basename "$BUNDLE")")
+          (cd "$(dirname "$ARCHIVE")" && sha256sum "$(basename "$ARCHIVE")" > "$(basename "$ARCHIVE").sha256")
+          cp "$BUNDLE/SBOM.spdx.json" "$SBOM_ASSET"
+          cosign sign-blob --yes --bundle "$ARCHIVE.sigstore.json" "$ARCHIVE"
+          cosign sign-blob --yes --bundle "$SBOM_ASSET.sigstore.json" "$SBOM_ASSET"
+          echo "archive=$ARCHIVE" >> "$GITHUB_OUTPUT"
+          echo "sbom=$SBOM_ASSET" >> "$GITHUB_OUTPUT"
+      - name: Verify signed release artifacts
+        env:
+          ARCHIVE: ${{ steps.artifacts.outputs.archive }}
+          SBOM: ${{ steps.artifacts.outputs.sbom }}
+        run: |
+          CERTIFICATE_IDENTITY="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/release.yml@${GITHUB_REF}"
+          VERIFY_ARGS=(
+            --certificate-identity "$CERTIFICATE_IDENTITY"
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
+          )
+          cosign verify-blob "$ARCHIVE" --bundle "$ARCHIVE.sigstore.json" "${VERIFY_ARGS[@]}"
+          cosign verify-blob "$SBOM" --bundle "$SBOM.sigstore.json" "${VERIFY_ARGS[@]}"
+      - name: Publish GitHub release
+        env:
+          ARCHIVE: ${{ steps.artifacts.outputs.archive }}
+          SBOM: ${{ steps.artifacts.outputs.sbom }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "Bareline $GITHUB_REF_NAME" \
+            --generate-notes \
+            "$ARCHIVE" "$ARCHIVE.sha256" "$ARCHIVE.sigstore.json" "$SBOM" "$SBOM.sigstore.json"

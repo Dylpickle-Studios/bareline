@@ -1,4 +1,4 @@
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -174,13 +174,17 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
       ],
     },
     bodyLimit: config.limits.requestBodyBytes,
-    requestIdHeader: 'x-request-id',
+    // Never trust a client-supplied correlation value. Generate an opaque ID at the application
+    // boundary and expose only that value in logs, responses, and audit records.
+    requestIdHeader: false,
+    genReqId: () => randomUUID(),
     trustProxy: config.server.tls.mode === 'proxy' ? ['127.0.0.1', '::1'] : false,
   });
 
   const requestStarts = new WeakMap<FastifyRequest, number>();
-  app.addHook('onRequest', (request, _reply, done) => {
+  app.addHook('onRequest', (request, reply, done) => {
     requestStarts.set(request, performance.now());
+    reply.header('x-request-id', request.id);
     done();
   });
   app.addHook('onResponse', async (request, reply) => {
@@ -247,7 +251,7 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
   await app.register(rateLimit, { max: 300, timeWindow: '1 minute' });
   await app.register(swagger, {
     openapi: {
-      info: { title: `${product.name} API`, version: '1.0.0' },
+      info: { title: `${product.name} API`, version: product.version },
       components: {
         securitySchemes: {
           bearerToken: { type: 'http', scheme: 'bearer', bearerFormat: 'personal access token' },

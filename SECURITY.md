@@ -2,16 +2,29 @@
 
 ## Supported versions
 
-Until a supported-release policy is published, only the current main development line is supported
-for security fixes. Do not infer a production support commitment from the package version.
+The latest minor release line receives security fixes. Older release lines are not backported unless
+the release record says otherwise; upgrade to the latest release before reporting whether an issue is
+still present.
+
+| Release line      | Security support                                      |
+| ----------------- | ----------------------------------------------------- |
+| `1.1.x`           | Supported                                             |
+| `1.0.x` and older | Upgrade required; no backport commitment              |
+| `main`            | Development line; not a production support commitment |
 
 ## Reporting vulnerabilities
 
-Do not open a public issue for a suspected vulnerability. The project owner must configure and test
-a private security channel before production exposure. Until that channel is published, contact the
-project owner through the private channel designated for this deployment; do not send secrets or
-details through a public issue or discussion. Include the affected version, reproduction, impact,
-and proposed mitigation. Response and disclosure timelines are agreed case by case.
+Do not open a public issue for a suspected vulnerability. Use the private
+[GitHub Security Advisory report form](https://github.com/Dylpickle-Studios/bareline/security/advisories/new).
+If that form is unavailable, contact the project owner privately and do not send secrets or details
+through a public issue or discussion. Include the affected version or commit, deployment context,
+reproduction, impact, and proposed mitigation. Remove credentials and private repository data from
+the report; attach a minimal proof of concept only when necessary.
+
+Maintainers will acknowledge a complete report within three business days, provide an update at
+least every seven days while triaging, and coordinate a fix, credit, and disclosure date with the
+reporter. Emergency active exploitation may require an accelerated disclosure. Do not publish an
+advisory or proof of concept until the maintainer confirms that affected users have a mitigation.
 
 Never include production credentials, private repository contents, or personal data in a report.
 

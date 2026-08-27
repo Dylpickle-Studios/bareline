@@ -57,8 +57,8 @@ still reachable from another ref. The default branch cannot be deleted.
 
 ## Tags
 
-Create an annotated release tag with `git tag -a v1.0.0 -m "Version 1.0.0"`, then publish it with
-`git push origin v1.0.0`. Signed annotated tags expose verification state in the tag list. Do not
+Create an annotated release tag with `git tag -a v1.1.0 -m "Version 1.1.0"`, then publish it with
+`git push origin v1.1.0`. Signed annotated tags expose verification state in the tag list. Do not
 move release tags after publishing them.
 
 ## SSH keys

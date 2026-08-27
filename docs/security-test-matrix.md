@@ -25,6 +25,8 @@ encryption, shared API authorization, and OpenAPI exposure.
 | Parser robustness                        | `tests/fuzz/property-fuzz.test.ts`, nightly `fuzz-nightly.yml`                                                                    |
 | Metrics and readiness boundaries         | `health.integration.test.ts`, `metrics.test.ts`                                                                                   |
 | Unsafe deletion and races                | `groups-repository-admin.integration.test.ts`, `web-commit.integration.test.ts`, `auth.test.ts`                                   |
+| Request-ID trust boundary                | `errors.integration.test.ts`; generated IDs are returned while supplied IDs are ignored                                           |
+| Static analysis and release verification | CodeQL workflow; `release:verify`; signed archive/SBOM and image-attestation checks in release workflows                          |
 
 Supply-chain policy is checked by `scripts/verify-supply-chain.mjs` in CI; it is not a substitute
 for reviewing advisories, pinning deployment artifacts, or an independent audit.

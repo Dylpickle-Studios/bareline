@@ -2,6 +2,35 @@
 
 All notable changes follow Keep a Changelog. This project uses semantic versioning after 1.0.
 
+## [1.1.0] - 2026-08-27
+
+### Added
+
+- Strict recursive configuration validation, bounded Git input/concurrency controls, DNS-aware
+  outbound policy, IPv4/IPv6 CIDR matching, and trusted request-ID generation.
+- Process-separated WebAssembly plugin execution with memory, heap, message, queue, timeout, and
+  package-integrity limits; trusted plugin enablement remains an explicit risk decision.
+- Atomic, authenticated backup manifests, online SQLite/WAL capture, staged restore with rollback,
+  release checksums, parser fuzzing, supply-chain policy checks, and readiness/metrics endpoints.
+- CodeQL/static-analysis workflow, immutable CI action and base-image pins, container SBOM/provenance,
+  Cosign image signing, and a tag-triggered release workflow that publishes signed standalone
+  archives and SPDX SBOMs.
+
+### Changed
+
+- HTTP routes are registered through focused modules with a typed application context.
+- Remote Git/npm plugin and mirror retrieval rejects credentials, redirects, DNS rebinding, and
+  private/reserved destinations; npm plugins require an exact semantic version.
+- Production backup and restore CLI operations require an authenticated `security.masterKey`.
+- The standalone release bundle and OpenAPI metadata now derive their version from package metadata.
+- The upgrade guide documents signed bundle/SBOM verification, immutable image verification, and
+  rollback-safe backup and restore steps.
+
+### Security
+
+- Client-provided `x-request-id` values are ignored to prevent log and audit correlation spoofing.
+- Security reporting is documented through the repository's private GitHub Security Advisory flow.
+
 ## [1.0.0] - 2026-08-25
 
 ### Added

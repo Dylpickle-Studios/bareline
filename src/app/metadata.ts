@@ -4,5 +4,5 @@ export const product = Object.freeze({
   websiteUrl: '/',
   documentationUrl: '/docs',
   logoPath: '/assets/logo.svg',
-  version: '0.1.0',
+  version: '1.1.0',
 });

@@ -91,6 +91,8 @@ and a launcher. It requires the system Git executable, but not a separately inst
 Native SQLite and Argon2 bindings make a platform-specific bundle more reliable than an opaque
 single-file executable. Run `npm run release:bundle` on the target platform family.
 
-Verify the generated `SHA256SUMS` before installation. Container deployments should verify the
-published immutable digest, SBOM, provenance attestation, and signature; tags are not deployment
-identifiers. Keep the release record with the exact image, action, dependency, and runtime digests.
+Verify the generated `SHA256SUMS` before installation. Published bundles additionally include a
+Sigstore-signed archive and SPDX SBOM; verify those sidecars against the release workflow identity.
+Container deployments should verify the published immutable digest, signed SPDX SBOM, SLSA provenance
+attestation, and image signature; tags are not deployment identifiers. Keep the release record with
+the exact image, action, dependency, and runtime digests.

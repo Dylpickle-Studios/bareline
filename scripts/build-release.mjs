@@ -48,6 +48,27 @@ await promisify(execFile)(
     cwd: target,
   },
 );
+// npm creates development-oriented executable links in .bin. The server starts through the
+// bundled Node launcher and does not need them; removing them keeps the release tree composed of
+// regular files and prevents link traversal during checksum verification.
+await rm(join(target, 'node_modules', '.bin'), {
+  recursive: true,
+  force: true,
+  maxRetries: 5,
+  retryDelay: 200,
+});
+const sbomPath = join(target, 'SBOM.spdx.json');
+await promisify(execFile)(
+  'sh',
+  [
+    '-c',
+    'npm sbom --package-lock-only --omit=dev --sbom-format=spdx --sbom-type=application > SBOM.spdx.json',
+  ],
+  { cwd: target },
+);
+const sbom = await readFile(sbomPath, 'utf8');
+if (!sbom.trim().startsWith('{')) throw new Error('npm sbom did not produce JSON');
+await chmod(sbomPath, 0o644);
 const releaseFiles = await filesUnder(target);
 const checksums = [];
 for (const file of releaseFiles) {

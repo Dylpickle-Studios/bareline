@@ -61,6 +61,7 @@ npm test
 npm run test:fuzz
 npm audit --omit=dev
 npm run release:bundle
+npm run release:verify
 npm run smoke:release
 ```
 

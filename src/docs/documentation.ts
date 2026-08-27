@@ -6,6 +6,7 @@ import { headingAnchor, renderMarkdown } from '../web/markdown.js';
 export const documentation = [
   { slug: 'getting-started', title: 'Getting Started', file: 'getting-started.md' },
   { slug: 'deployment', title: 'Deployment and TLS', file: 'deployment.md' },
+  { slug: 'upgrade', title: 'Upgrade and recovery', file: 'upgrade.md' },
   { slug: 'git-guide', title: 'Git guide', file: 'git-guide.md' },
   { slug: 'administration', title: 'Administration', file: 'administration.md' },
   { slug: 'operations', title: 'Operations and backups', file: 'operations.md' },

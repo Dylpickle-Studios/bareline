@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" role="img" aria-label="Bareline logo">
-  <rect width="40" height="40" rx="7" fill="#236b5b"/>
-  <path d="M13 8v24m0-12c0-4 3.2-6.5 7.2-6.5H27" fill="none" stroke="#f6f4ec" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="13" cy="8" r="2.7" fill="#f6f4ec"/>
-  <circle cx="13" cy="20" r="2.7" fill="#f6f4ec"/>
-  <circle cx="13" cy="32" r="2.7" fill="#f6f4ec"/>
-  <circle cx="27" cy="13.5" r="2.7" fill="#f6f4ec"/>
-</svg>
