@@ -71,6 +71,7 @@ jobs:
         env:
           ARCHIVE: ${{ steps.artifacts.outputs.archive }}
           SBOM: ${{ steps.artifacts.outputs.sbom }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" \
             --title "Bareline $GITHUB_REF_NAME" \
