@@ -493,7 +493,7 @@ export const migrations: readonly Migration[] = [
     sql: `ALTER TABLE repositories ADD COLUMN archived_at TEXT;`,
   },
   {
-    version: 18,
+    version: 17,
     name: 'signed_webhook_delivery_queue',
     sql: `
       CREATE TABLE webhooks (

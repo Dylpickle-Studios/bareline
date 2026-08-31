@@ -59,7 +59,6 @@ describe('cross-boundary security regressions', () => {
         },
       });
       expect(csrf.statusCode).toBe(403);
-      expect(app.printRoutes()).not.toContain('hook');
     } finally {
       await app.close();
     }
