@@ -39,6 +39,7 @@ export async function authorizeSshCommand(
   const repository = repositories.find(match.groups.owner, match.groups.repository);
   if (!repository) throw new SshAuthorizationError();
   const operation = match[1] as AuthorizedSshCommand['operation'];
+  if (operation === 'git-receive-pack' && repository.archivedAt) throw new SshAuthorizationError();
   if (operation === 'git-receive-pack' && repository.storageKind === 'working_tree')
     throw new SshAuthorizationError();
   if (operation === 'git-receive-pack') {

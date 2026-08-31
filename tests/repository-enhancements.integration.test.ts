@@ -100,6 +100,25 @@ describe('Git-focused repository enhancements', () => {
         .toString()
         .trim(),
     ).toBe('true');
+    const archived = enhancements.setArchived(repository, user.id, true);
+    expect(archived.archivedAt).not.toBeNull();
+    await expect(
+      mutations.commitFile({
+        repository: archived,
+        actorUserId: user.id,
+        branch: 'main',
+        filePath: 'archived.txt',
+        content: Buffer.from('no'),
+        message: 'TEST-blocked while archived',
+      }),
+    ).rejects.toThrow('archived and read-only');
+    await expect(enhancements.runMirror(archived, user.id)).rejects.toThrow('cannot be mirrored');
+    const report = await enhancements.health(archived);
+    expect(report.archived).toBe(true);
+    expect(report.defaultBranch).toEqual({ name: 'main', exists: true });
+    expect(report.refs.branches).toBeGreaterThanOrEqual(1);
+    expect(report.status).toBe('healthy');
+    expect(enhancements.setArchived(archived, user.id, false).archivedAt).toBeNull();
     database.close();
   });
 });

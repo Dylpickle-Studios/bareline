@@ -145,6 +145,30 @@ const configSchema = z
         npmExecutable: 'npm',
         installTimeoutMs: 60_000,
       }),
+    webhooks: z
+      .object({
+        allowedHosts: z.array(configuredHostname).default([]),
+        timeoutMs: positiveInt.max(30_000).default(5000),
+        maxAttempts: z.number().int().min(1).max(10).default(5),
+        maxPending: z.number().int().min(1).max(10_000).default(1000),
+      })
+      .strict()
+      .default({ allowedHosts: [], timeoutMs: 5000, maxAttempts: 5, maxPending: 1000 }),
+    observability: z
+      .object({
+        otlpEndpoint: z
+          .url()
+          .refine((value) => value.startsWith('https://'), 'OTLP endpoint must use HTTPS')
+          .optional(),
+        allowedHosts: z.array(configuredHostname).default([]),
+        serviceName: z
+          .string()
+          .regex(/^[A-Za-z0-9_.-]{1,128}$/)
+          .default('bareline'),
+        maxPendingSpans: z.number().int().min(1).max(10_000).default(512),
+      })
+      .strict()
+      .default({ allowedHosts: [], serviceName: 'bareline', maxPendingSpans: 512 }),
     authentication: z
       .object({
         oidc: z
@@ -222,6 +246,19 @@ const configSchema = z
   })
   .strict()
   .superRefine((config, context) => {
+    const otlpHost = config.observability.otlpEndpoint
+      ? canonicalHostname(new URL(config.observability.otlpEndpoint).hostname)
+      : null;
+    if (
+      otlpHost &&
+      !config.observability.allowedHosts.some((host) => canonicalHostname(host) === otlpHost)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['observability', 'allowedHosts'],
+        message: 'must explicitly allowlist the OTLP endpoint hostname',
+      });
+    }
     if (config.server.tls.mode === 'http' && config.server.publicUrl.startsWith('https://'))
       context.addIssue({
         code: 'custom',

@@ -31,10 +31,16 @@ and creates web commits. File writes require base64 content, a branch, and a com
 requires the exact `owner/repository` confirmation query and uses delayed trash semantics.
 Repository updates can also transfer ownership to a group the caller owns.
 
-Repository subresources expose activity, branch policies, deploy keys, mirror configuration, and
+Repository subresources expose activity, branch policies, deploy keys, mirror configuration, signed
+webhook endpoints, and
 pin state. These routes call the same enhancement service as HTML settings and therefore retain the
 same repository permission checks and audit behavior. Deploy-key material is returned only to
 repository administrators; private activity remains subject to repository read authorization.
+
+Webhook creation requires repository administration and returns the HMAC secret exactly once.
+Endpoints must be HTTPS and their hostname must be configured in `webhooks.allowedHosts`; delivery
+records do not expose that secret. Receivers should require the `x-bareline-signature-256`,
+`x-bareline-event`, and `x-bareline-delivery` headers before accepting a payload.
 
 ## Users, groups, and administration
 

@@ -23,6 +23,8 @@ export function registerGitRoutes(context: AppRouteContext): void {
     if (!operation || !Array.isArray(body.objects))
       throw new runtime.ValidationError('Invalid LFS batch request');
     const { repository } = lfsRepository(request, operation === 'upload' ? 'write' : 'read');
+    if (operation === 'upload' && repository.archivedAt)
+      return reply.code(403).send({ message: 'Archived repositories are read-only.' });
     const objects: runtime.LfsBatchObject[] = body.objects.map((value) => {
       if (typeof value !== 'object' || value === null)
         throw new runtime.ValidationError('Invalid LFS object');
@@ -39,6 +41,8 @@ export function registerGitRoutes(context: AppRouteContext): void {
 
   app.put('/:owner/:repository.git/info/lfs/objects/:objectId', async (request, reply) => {
     const { repository } = lfsRepository(request, 'write');
+    if (repository.archivedAt)
+      return reply.code(403).send({ message: 'Archived repositories are read-only.' });
     const parameters = request.params as { objectId: string };
     await lfs.upload(
       repository,
@@ -94,6 +98,8 @@ export function registerGitRoutes(context: AppRouteContext): void {
     if (levels[permission] < (write ? 2 : 1)) return gitAuthenticationRequired(reply);
     if (write && repository.storageKind === 'working_tree')
       return reply.code(403).send('Working-tree repositories are browse-only.');
+    if (write && repository.archivedAt)
+      return reply.code(403).send('Archived repositories are read-only.');
     if (write) enhancements.assertTransportWritable(repository.id);
     await runtime.serveSmartHttp(
       config,
@@ -121,6 +127,8 @@ export function registerGitRoutes(context: AppRouteContext): void {
     if (levels[permission] < (write ? 2 : 1)) return gitAuthenticationRequired(reply);
     if (write && repository.storageKind === 'working_tree')
       return reply.code(403).send('Working-tree repositories are browse-only.');
+    if (write && repository.archivedAt)
+      return reply.code(403).send('Archived repositories are read-only.');
     if (write) enhancements.assertTransportWritable(repository.id);
     await runtime.serveSmartHttp(
       config,

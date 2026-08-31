@@ -17,6 +17,7 @@ describe('Atom feeds', () => {
         storageKind: 'hosted_bare',
         storagePath: null,
         defaultBranch: 'main',
+        archivedAt: null,
       },
       commits: [
         {

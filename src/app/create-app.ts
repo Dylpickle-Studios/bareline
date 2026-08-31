@@ -45,6 +45,8 @@ import { RepositoryEnhancementService } from '../repositories/repository-enhance
 import { RepositoryAdminService } from '../repositories/repository-admin-service.js';
 import { SearchService } from '../search/search-service.js';
 import { MetricsRegistry } from '../observability/metrics.js';
+import { OtlpTracing, type TraceContext } from '../observability/otlp-tracing.js';
+import { WebhookService } from '../webhooks/webhook-service.js';
 import { render as renderView } from '../web/render.js';
 import type { AppRouteContext } from './routes/route-context.js';
 import { registerAdminRoutes } from './routes/admin.js';
@@ -128,6 +130,7 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
     repositories,
   );
   const pluginEvents = new PluginEventService(database, pluginManager, pluginContributions);
+  const webhooks = new WebhookService(database, config, audit);
   const render = (view: string, data: Record<string, unknown>) => {
     const account = data.user as { pluginTheme?: string | null } | null | undefined;
     const selectedTheme = account?.pluginTheme
@@ -146,12 +149,14 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
     payload: Readonly<Record<string, unknown>>,
   ) => {
     pluginEvents.publish(event, payload);
+    webhooks.publish(event, payload);
   };
   repositories.setEventPublisher(publishRepositoryEvent);
   repositoryAdmin.setEventPublisher(publishRepositoryEvent);
   mutations.setEventPublisher(publishRepositoryEvent);
   const administration = new AdminService(database, audit);
   const metrics = new MetricsRegistry();
+  const tracing = new OtlpTracing(config.observability);
   let closing = false;
   const app = Fastify({
     ...(config.server.tls.mode === 'native'
@@ -182,9 +187,13 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
   });
 
   const requestStarts = new WeakMap<FastifyRequest, number>();
+  const requestTraces = new WeakMap<FastifyRequest, TraceContext>();
   app.addHook('onRequest', (request, reply, done) => {
     requestStarts.set(request, performance.now());
+    const trace = tracing.start();
+    requestTraces.set(request, trace);
     reply.header('x-request-id', request.id);
+    reply.header('traceparent', trace.traceparent);
     done();
   });
   app.addHook('onResponse', async (request, reply) => {
@@ -213,6 +222,19 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
     if (route.includes('backup')) {
       metrics.increment('backup_operations_total', { route, status });
       metrics.observe('backup_operation_duration_seconds', durationSeconds, { route });
+    }
+    const trace = requestTraces.get(request);
+    if (trace) {
+      tracing.complete(trace, {
+        method: request.method,
+        route,
+        statusCode: reply.statusCode,
+        durationMs: Math.round(durationSeconds * 1000),
+        requestId: request.id,
+      });
+      if (config.observability.otlpEndpoint) {
+        request.log.info({ traceId: trace.traceId, spanId: trace.spanId }, 'request completed');
+      }
     }
   });
 
@@ -280,6 +302,12 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
     });
   }, 1000);
   pluginEventTimer.unref();
+  const webhookTimer = setInterval(() => {
+    void webhooks.processNext().catch((error: unknown) => {
+      app.log.error({ err: error }, 'webhook delivery worker failed');
+    });
+  }, 1000);
+  webhookTimer.unref();
   const trashTimer = setInterval(
     () => {
       void repositoryAdmin.purgeExpiredTrash().catch((error: unknown) => {
@@ -300,13 +328,20 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
       });
   }, 60_000);
   mirrorTimer.unref();
+  const telemetryTimer = setInterval(() => {
+    void tracing.flush();
+  }, 5000);
+  telemetryTimer.unref();
   await repositoryAdmin.purgeExpiredTrash();
-  app.addHook('onClose', () => {
+  app.addHook('onClose', async () => {
     closing = true;
     clearInterval(searchTimer);
     clearInterval(pluginEventTimer);
+    clearInterval(webhookTimer);
     clearInterval(trashTimer);
     clearInterval(mirrorTimer);
+    clearInterval(telemetryTimer);
+    await tracing.flush();
     database.close();
   });
 
@@ -458,6 +493,7 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
     pluginManager,
     pluginContributions,
     pluginEvents,
+    webhooks,
     administration,
     metrics,
     render,

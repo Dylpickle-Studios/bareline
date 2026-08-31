@@ -57,6 +57,18 @@ plugins:
   allowedNpmPackages: []
   npmExecutable: npm
   installTimeoutMs: 60000
+webhooks:
+  # Exact HTTPS hosts permitted for signed webhook delivery. Empty disables webhooks.
+  allowedHosts: []
+  timeoutMs: 5000
+  maxAttempts: 5
+  maxPending: 1000
+observability:
+  # Optional OTLP/HTTP JSON endpoint. Its hostname must be in allowedHosts.
+  # otlpEndpoint: https://telemetry.example/v1/traces
+  allowedHosts: []
+  serviceName: bareline
+  maxPendingSpans: 512
 authentication:
   # OIDC providers use authorization code + PKCE + state + nonce. Secrets should use ${ENV}.
   oidc: []

@@ -27,6 +27,11 @@ YAML allowlist. Template creation fetches refs into a fresh opaque bare reposito
 storage and metadata if population fails. Activity stores bounded event summaries, not commits or
 file content. Trusted signer records annotate Git's verification result without changing it.
 
+Webhook endpoints are repository metadata with encrypted per-endpoint HMAC secrets. Events enter a
+bounded durable queue; a worker resolves each HTTPS allowlisted destination through the outbound
+policy, signs the exact JSON payload, and retries only a finite number of times. Optional OTLP
+export follows the same HTTPS/allowlist model and never trusts client-provided trace context.
+
 SQLite is configured for foreign keys and WAL. Migrations are ordered, checksummed, and transactional
 where SQLite permits. Backups use the online SQLite API plus staged filesystem copies, authenticated
 manifests, and recoverable restore swaps. One serving process is supported; horizontal multi-writer

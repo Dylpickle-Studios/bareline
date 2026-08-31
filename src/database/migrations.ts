@@ -487,4 +487,42 @@ export const migrations: readonly Migration[] = [
     name: 'plugin_package_digests',
     sql: `ALTER TABLE plugins ADD COLUMN package_digest TEXT CHECK(package_digest IS NULL OR package_digest GLOB '[0-9a-f]*');`,
   },
+  {
+    version: 16,
+    name: 'repository_archival_lifecycle',
+    sql: `ALTER TABLE repositories ADD COLUMN archived_at TEXT;`,
+  },
+  {
+    version: 18,
+    name: 'signed_webhook_delivery_queue',
+    sql: `
+      CREATE TABLE webhooks (
+        id INTEGER PRIMARY KEY,
+        repository_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
+        url TEXT NOT NULL,
+        events_json TEXT NOT NULL CHECK(json_valid(events_json) AND length(events_json) <= 4096),
+        secret_encrypted BLOB NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0, 1)),
+        created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL,
+        last_success_at TEXT,
+        last_error TEXT
+      ) STRICT;
+      CREATE INDEX webhooks_repository ON webhooks(repository_id, enabled);
+      CREATE TABLE webhook_deliveries (
+        id TEXT PRIMARY KEY,
+        webhook_id INTEGER NOT NULL REFERENCES webhooks(id) ON DELETE CASCADE,
+        event_name TEXT NOT NULL,
+        payload_json TEXT NOT NULL CHECK(length(payload_json) <= 65536),
+        attempts INTEGER NOT NULL DEFAULT 0,
+        state TEXT NOT NULL DEFAULT 'pending' CHECK(state IN ('pending', 'running', 'failed', 'delivered')),
+        available_at TEXT NOT NULL,
+        lease_until TEXT,
+        last_error TEXT,
+        created_at TEXT NOT NULL,
+        delivered_at TEXT
+      ) STRICT;
+      CREATE INDEX webhook_deliveries_ready ON webhook_deliveries(state, available_at, lease_until);
+    `,
+  },
 ];

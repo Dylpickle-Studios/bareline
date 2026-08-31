@@ -16,6 +16,8 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { tmpdir } from 'node:os';
+import BetterSqlite3 from 'better-sqlite3';
 import type { AppConfig } from '../config/config.js';
 import type { Database } from '../database/database.js';
 
@@ -52,6 +54,8 @@ export interface BackupCreateOptions {
    * which SQLite cannot snapshot. The release function is called after the final rename.
    */
   quiesce?: () => Promise<BackupQuiesceRelease>;
+  /** Allows a scheduler to use one timestamp for naming, manifesting, and due calculations. */
+  now?: () => Date;
 }
 
 export interface BackupVerifyOptions {
@@ -139,9 +143,12 @@ export class BackupService {
            ORDER BY logicalName`,
         )
         .all() as ExternalRepositoryBackupReference[];
+      const createdAt = options.now ? options.now() : new Date();
+      if (Number.isNaN(createdAt.getTime()))
+        throw new BackupError('Backup creation time is invalid');
       const manifest: BackupManifest = {
         formatVersion: 1,
-        createdAt: new Date().toISOString(),
+        createdAt: createdAt.toISOString(),
         applicationVersion: this.applicationVersion,
         consistency: {
           sqlite: 'online-backup',
@@ -336,6 +343,52 @@ export class BackupService {
       }
     } finally {
       await lock.release();
+    }
+  }
+
+  /**
+   * Verify that a backup can be materialized away from the live service. This is deliberately
+   * narrower than restore(): it never reads the live configuration targets or swaps data.
+   */
+  static async verifyRestorable(
+    sourceInput: string,
+    options: BackupVerifyOptions = {},
+  ): Promise<BackupManifest> {
+    const source = resolve(sourceInput);
+    const manifest = await BackupService.verify(source, options);
+    await assertRegularFile(join(source, 'app.db'), 'Backup is missing app.db');
+    await assertRegularFile(join(source, 'config.yml'), 'Backup is missing config.yml');
+    for (const directory of ['repositories', 'repository-trash', 'lfs', 'plugins', 'plugin-trash'])
+      await assertDirectory(join(source, directory), `Backup is missing ${directory}`);
+
+    const staging = await mkdtemp(join(tmpdir(), 'bareline-restore-verify-'));
+    try {
+      await copyRegularFile(join(source, 'app.db'), join(staging, 'app.db'), 0o600);
+      await copyRegularFile(join(source, 'config.yml'), join(staging, 'config.yml'), 0o600);
+      for (const directory of [
+        'repositories',
+        'repository-trash',
+        'lfs',
+        'plugins',
+        'plugin-trash',
+      ])
+        await safeCopyTree(join(source, directory), join(staging, directory));
+
+      const database = new BetterSqlite3(join(staging, 'app.db'), {
+        readonly: true,
+        fileMustExist: true,
+      });
+      try {
+        const integrity = database.pragma('quick_check', { simple: true }) as string;
+        if (integrity !== 'ok')
+          throw new BackupError(`Restored SQLite integrity check failed: ${integrity}`);
+        database.prepare('SELECT version FROM schema_migrations LIMIT 1').get();
+      } finally {
+        database.close();
+      }
+      return manifest;
+    } finally {
+      await rm(staging, { recursive: true, force: true });
     }
   }
 }
@@ -592,6 +645,11 @@ async function ensureParentDirectory(path: string): Promise<void> {
 async function assertRegularFile(path: string, message: string): Promise<void> {
   const info = await lstatIfExists(path);
   if (!info || info.isSymbolicLink() || !info.isFile()) throw new BackupError(message);
+}
+
+async function assertDirectory(path: string, message: string): Promise<void> {
+  const info = await lstatIfExists(path);
+  if (!info || info.isSymbolicLink() || !info.isDirectory()) throw new BackupError(message);
 }
 
 async function lstatIfExists(path: string): Promise<Awaited<ReturnType<typeof lstat>> | undefined> {

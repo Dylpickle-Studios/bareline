@@ -2,6 +2,20 @@
 
 All notable changes follow Keep a Changelog. This project uses semantic versioning after 1.0.
 
+## [Unreleased]
+
+### Added
+
+- Stateless scheduled backup policies with bounded retention, dry-run/status commands, isolated
+  restore verification, and symlink-safe pruning.
+- Deterministic audit JSONL exports and HMAC-authenticated integrity checkpoints for independent
+  off-host retention and verification.
+- Repository archival/read-only controls, bounded Git health reports, and transport-level write
+  blocking for archived repositories.
+- Repository-scoped, HMAC-signed webhooks with encrypted one-time secrets, SSRF-aware HTTPS
+  allowlists, durable bounded retries, and dead-letter state.
+- Opt-in OTLP/HTTP trace export with generated trace context and bounded in-memory buffering.
+
 ## [1.1.0] - 2026-08-27
 
 ### Added

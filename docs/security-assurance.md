@@ -17,6 +17,10 @@ the following controls:
 - A backup is created from a quiesced service, verified, restored into an isolated data root, and
   exercised with login, private-repository browsing, clone, push, LFS, search rebuild, and plugin
   validation. Imported repositories and external backup destinations are tested separately.
+- Audit events are exported to independently retained storage, then covered by a
+  master-key-authenticated checkpoint that is verified from the production database. Record the
+  checkpoint range, storage location, retention controls, and verification result with the release
+  evidence.
 - Deployment egress policy blocks private, loopback, link-local, metadata, and otherwise reserved
   destinations for every application-controlled outbound request. Application URL validation is
   defense in depth; a firewall or network policy remains required.

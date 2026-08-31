@@ -33,9 +33,10 @@ Git subprocesses, SQLite, imported roots, archive/upload parsing, and plugin run
   reject embedded credentials and redirects, require explicit host policy, resolve at connection
   time, reject DNS rebinding and private/loopback/link-local/metadata/multicast/reserved addresses,
   and remain subject to deployment egress controls.
-- **Branch-policy bypass:** web commits enforce matching policies before object creation. Git
-  receive rejects force pushes/deletions conservatively and refuses transport pushes when an
-  advanced policy cannot be proven without executable hooks.
+- **Branch-policy and lifecycle bypass:** web commits enforce matching policies before object
+  creation. Git receive rejects force pushes/deletions conservatively and refuses transport pushes
+  when an advanced policy cannot be proven without executable hooks. Archived repositories reject
+  every Bareline write path while retaining read access.
 - **Off-site backups:** destination credentials use authenticated encryption and uploads use bounded
   SigV4 over HTTPS. Manifests can be HMAC-authenticated with `security.masterKey`; optional archive
   encryption uses AES-256-GCM with a separate environment key. Restore stages and rolls back target

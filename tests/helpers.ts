@@ -46,5 +46,11 @@ export function temporaryConfig(): AppConfig {
       npmExecutable: 'npm',
       installTimeoutMs: 60_000,
     },
+    webhooks: { allowedHosts: [], timeoutMs: 5000, maxAttempts: 5, maxPending: 1000 },
+    observability: {
+      allowedHosts: [],
+      serviceName: 'bareline',
+      maxPendingSpans: 512,
+    },
   };
 }

@@ -42,6 +42,13 @@ export function registerRepositorySettingsRoutes(context: AppRouteContext): void
     );
   });
 
+  app.get('/:owner/:repository/settings/health', async (request, reply) => {
+    const { repository, current } = readableRepository(request);
+    if (!current) throw new runtime.AuthorizationError();
+    repositories.require(repository, current.user.id, 'admin');
+    return reply.send(await enhancements.health(repository));
+  });
+
   app.post('/:owner/:repository/pin', async (request, reply) => {
     const { repository, current } = readableRepository(request);
     if (!current) throw new runtime.AuthorizationError();
@@ -96,6 +103,10 @@ export function registerRepositorySettingsRoutes(context: AppRouteContext): void
       });
     } else if (body.action === 'removePolicy') {
       await enhancements.removePolicy(repository, current.user.id, body.refPattern ?? '');
+    } else if (body.action === 'archive') {
+      updated = enhancements.setArchived(repository, current.user.id, true);
+    } else if (body.action === 'unarchive') {
+      updated = enhancements.setArchived(repository, current.user.id, false);
     } else if (body.action === 'deployKey') {
       await enhancements.addDeployKey(
         repository,

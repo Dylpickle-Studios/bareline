@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { AuditService } from '../src/audit/audit-service.js';
 import { AuthService } from '../src/auth/auth-service.js';
 import { BackupService } from '../src/backup/backup-service.js';
+import { BackupPolicyService } from '../src/backup/backup-policy-service.js';
 import { openDatabase } from '../src/database/database.js';
 import { GitRunner } from '../src/git/git-runner.js';
 import { RepositoryService } from '../src/repositories/repository-service.js';
@@ -53,6 +54,9 @@ describe('backup and restore', () => {
     expect(Object.keys(manifest.files)).toContain('plugins/example.plugin/1.0.0/plugin.yml');
     expect(Object.keys(manifest.files)).toContain('repository-trash/deleted.git');
     await expect(BackupService.verify(destination)).resolves.toMatchObject({ formatVersion: 1 });
+    await expect(BackupService.verifyRestorable(destination)).resolves.toMatchObject({
+      formatVersion: 1,
+    });
     database.close();
 
     await writeFile(join(config.storage.repositories, 'live-only-before-restore'), 'preserve me');
@@ -155,5 +159,49 @@ describe('backup and restore', () => {
         (entry) => entry.startsWith('.restore-staging-') || entry.startsWith('pre-restore-'),
       ),
     ).toEqual([]);
+  });
+
+  it('runs a bounded scheduled backup policy, verifies an isolated restore, and prunes retention', async () => {
+    const config = temporaryConfig();
+    config.security.masterKey = Buffer.alloc(32, 9).toString('base64url');
+    const database = openDatabase(config.database.path);
+    const root = await mkdtemp(join(tmpdir(), 'bareline-backup-policy-test-'));
+    const configFile = join(root, 'config.yml');
+    const output = join(root, 'scheduled');
+    await writeFile(configFile, 'server:\n  host: localhost\n', 'utf8');
+    let now = new Date('2026-08-31T09:00:00.000Z');
+    const service = new BackupPolicyService(database, config, '1.1.0', () => now);
+    const policy = { output, intervalHours: 1, retain: 1 };
+
+    const dryRun = await service.run(policy, configFile, { dryRun: true });
+    expect(dryRun.due).toBe(true);
+    expect(dryRun.created).toContain('bareline-20260831T090000000Z-');
+    await expect(readdir(output)).rejects.toThrow();
+
+    const first = await service.run(policy, configFile);
+    expect(first.created).toBeDefined();
+    expect(first.retained).toBe(1);
+    await expect(service.status(policy)).resolves.toMatchObject({ due: false, retained: 1 });
+
+    now = new Date('2026-08-31T11:00:00.000Z');
+    const second = await service.run(policy, configFile);
+    expect(second.created).toBeDefined();
+    expect(second.removed).toHaveLength(1);
+    expect(await readdir(output)).toHaveLength(1);
+    database.close();
+  });
+
+  it('rejects unsafe scheduled-backup policy limits', async () => {
+    const config = temporaryConfig();
+    config.security.masterKey = Buffer.alloc(32, 10).toString('base64url');
+    const database = openDatabase(config.database.path);
+    const service = new BackupPolicyService(database, config, '1.1.0');
+    await expect(
+      service.status({ output: join(tmpdir(), 'unused-backups'), intervalHours: 0, retain: 1 }),
+    ).rejects.toThrow(/interval-hours/);
+    await expect(
+      service.status({ output: join(tmpdir(), 'unused-backups'), intervalHours: 1, retain: 366 }),
+    ).rejects.toThrow(/retain/);
+    database.close();
   });
 });

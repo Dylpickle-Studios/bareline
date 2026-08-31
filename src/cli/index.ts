@@ -9,6 +9,7 @@ import { AdminService } from '../admin/admin-service.js';
 import { AuthService } from '../auth/auth-service.js';
 import { BackupService } from '../backup/backup-service.js';
 import { BackupDestinationService } from '../backup/backup-destination-service.js';
+import { BackupPolicyService } from '../backup/backup-policy-service.js';
 import { TokenService } from '../auth/token-service.js';
 import { loadConfig } from '../config/config.js';
 import { openDatabase } from '../database/database.js';
@@ -201,6 +202,31 @@ if (command === 'version') {
     );
   }
   database.close();
+} else if (command === 'audit' && arguments_[1] === 'export') {
+  const config = loadConfig(configFile);
+  const database = openDatabase(config.database.path);
+  const output = new AuditService(database).exportJsonLines();
+  database.close();
+  await writeAuditOutput(output, valueAfter('--output'));
+} else if (command === 'audit' && arguments_[1] === 'checkpoint') {
+  const config = loadConfig(configFile);
+  const masterKey = requiredMasterKey(config, 'audit checkpoints');
+  const database = openDatabase(config.database.path);
+  const checkpoint = new AuditService(database).createCheckpoint(masterKey);
+  database.close();
+  const output = `${JSON.stringify(checkpoint, null, 2)}\n`;
+  await writeAuditOutput(output, requiredValue('--output'));
+} else if (command === 'audit' && arguments_[1] === 'verify') {
+  const config = loadConfig(configFile);
+  const masterKey = requiredMasterKey(config, 'audit checkpoint verification');
+  const checkpointPath = resolve(requiredValue('--checkpoint'));
+  const checkpoint: unknown = JSON.parse(readFileSync(checkpointPath, 'utf8'));
+  const database = openDatabase(config.database.path);
+  const verified = new AuditService(database).verifyCheckpoint(checkpoint, masterKey);
+  database.close();
+  process.stdout.write(
+    `Audit checkpoint is valid (${String(verified.eventCount)} events through ${String(verified.lastEventId ?? 'the empty log')}).\n`,
+  );
 } else if (command === 'backup' && arguments_[1] === 'destination-add') {
   const config = loadConfig(configFile);
   const database = openDatabase(config.database.path);
@@ -252,6 +278,29 @@ if (command === 'version') {
   );
   database.close();
   process.stdout.write('Backup uploaded.\n');
+} else if (command === 'backup' && arguments_[1] === 'policy') {
+  const action = arguments_[2];
+  if (action !== 'run' && action !== 'status')
+    throw new Error('backup policy requires run or status');
+  const config = loadConfig(configFile);
+  requireMasterKey(config, 'backup policy operations');
+  const policy = {
+    output: requiredValue('--output'),
+    intervalHours: boundedInteger('--interval-hours'),
+    retain: boundedInteger('--retain'),
+  };
+  const database = openDatabase(config.database.path);
+  const service = new BackupPolicyService(database, config, product.version);
+  if (action === 'status') {
+    process.stdout.write(`${JSON.stringify(await service.status(policy), null, 2)}\n`);
+  } else {
+    const result = await service.run(policy, configFile, {
+      dryRun: arguments_.includes('--dry-run'),
+      force: arguments_.includes('--force'),
+    });
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  }
+  database.close();
 } else if (command === 'backup') {
   const config = loadConfig(configFile);
   requireMasterKey(config, 'backup creation');
@@ -277,7 +326,7 @@ if (command === 'version') {
   const config = loadConfig(configFile);
   requireMasterKey(config, 'backup verification');
   const input = requiredValue('--input');
-  const manifest = await BackupService.verify(
+  const manifest = await BackupService.verifyRestorable(
     input,
     config.security.masterKey
       ? { masterKey: config.security.masterKey, requireAuthenticated: true }
@@ -388,7 +437,7 @@ if (command === 'version') {
   process.exitCode = exitCode;
 } else {
   process.stderr.write(
-    `Usage: bareline <serve|doctor|version|config check|user create|user promote|user disable|repo import|repo rescan|repo mirrors-run|token create|search status|search rebuild|plugins validate|plugins list|backup|backup destination-add|backup destination-list|backup upload|restore|restore-verify|ssh setup|ssh authorized-keys|ssh serve> [options]\n`,
+    `Usage: bareline <serve|doctor|version|config check|user create|user promote|user disable|repo import|repo rescan|repo mirrors-run|token create|search status|search rebuild|plugins validate|plugins list|audit export|audit checkpoint|audit verify|backup|backup policy run|backup policy status|backup destination-add|backup destination-list|backup upload|restore|restore-verify|ssh setup|ssh authorized-keys|ssh serve> [options]\n`,
   );
   process.exitCode = 2;
 }
@@ -404,9 +453,34 @@ function requiredValue(name: string): string {
   return value;
 }
 
+function boundedInteger(name: string): number {
+  const value = requiredValue(name);
+  if (!/^\d+$/.test(value)) throw new Error(`${name} must be a whole number`);
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isSafeInteger(parsed)) throw new Error(`${name} must be a safe whole number`);
+  return parsed;
+}
+
+async function writeAuditOutput(output: string, requestedPath: string | undefined): Promise<void> {
+  if (!requestedPath) {
+    process.stdout.write(output);
+    return;
+  }
+  const destination = resolve(requestedPath);
+  await writeFile(destination, output, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+  process.stdout.write(
+    `Wrote audit output to ${destination}. Existing files are never replaced.\n`,
+  );
+}
+
 function requireMasterKey(config: ReturnType<typeof loadConfig>, operation: string): void {
   if (!config.security.masterKey)
     throw new Error(`security.masterKey is required for ${operation}`);
+}
+
+function requiredMasterKey(config: ReturnType<typeof loadConfig>, operation: string): string {
+  requireMasterKey(config, operation);
+  return config.security.masterKey ?? '';
 }
 
 function configuredGit(

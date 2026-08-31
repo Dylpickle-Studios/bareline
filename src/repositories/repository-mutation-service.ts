@@ -304,6 +304,8 @@ function repositoryEvent(repository: Repository): Readonly<Record<string, unknow
 }
 
 function ensureWebWritable(repository: Repository): void {
+  if (repository.archivedAt)
+    throw new WebCommitConflictError('This repository is archived and read-only');
   if (repository.storageKind === 'working_tree')
     throw new WebCommitInputError(
       'Working-tree repositories are browse-only in the web interface',

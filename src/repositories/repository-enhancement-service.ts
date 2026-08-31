@@ -5,7 +5,7 @@ import { inspectKey, SshKeyInputError } from '../ssh/ssh-key-service.js';
 import { OutboundPolicy, OutboundPolicyError } from '../security/outbound-policy.js';
 import { validateRef } from '../security/validation.js';
 import type { RepositoryService } from './repository-service.js';
-import type { Repository } from './repository-types.js';
+import type { Repository, RepositoryHealthReport } from './repository-types.js';
 
 export interface RepositoryPolicy {
   refPattern: string;
@@ -46,6 +46,109 @@ export class RepositoryEnhancementService {
       requireSignedCommits: Boolean(row.require_signed_commits),
       commitMessagePrefix: row.commit_message_pattern,
     }));
+  }
+
+  /**
+   * Archives retain all read operations but make every Bareline write path reject
+   * mutations. The timestamp, rather than a boolean, keeps the transition auditable.
+   */
+  setArchived(repository: Repository, actorUserId: number, archived: boolean): Repository {
+    this.repositories.require(repository, actorUserId, 'admin');
+    if (archived === Boolean(repository.archivedAt)) return repository;
+    const archivedAt = archived ? new Date().toISOString() : null;
+    this.database
+      .prepare('UPDATE repositories SET archived_at=?, updated_at=? WHERE id=?')
+      .run(archivedAt, new Date().toISOString(), repository.id);
+    this.audit.record({
+      actorUserId,
+      action: archived ? 'repository.archived' : 'repository.unarchived',
+      targetType: 'repository',
+      targetId: String(repository.id),
+    });
+    this.recordActivity(
+      repository.id,
+      actorUserId,
+      archived ? 'repository.archived' : 'repository.unarchived',
+    );
+    return { ...repository, archivedAt };
+  }
+
+  /** A bounded, read-only repository integrity summary suitable for an admin report. */
+  async health(repository: Repository): Promise<RepositoryHealthReport> {
+    const checkedAt = new Date().toISOString();
+    const issues: string[] = [];
+    let branches = 0;
+    let tags = 0;
+    let defaultBranchExists = false;
+    let count: number | null = null;
+    let size: string | null = null;
+    let packs: number | null = null;
+    try {
+      const path = await this.repositories.storagePath(repository);
+      const [refs, objectCount, defaultBranch, fsck] = await Promise.all([
+        this.git.run(['--git-dir', path, 'for-each-ref', '--format=%(refname)'], {
+          maxOutputBytes: 1024 * 1024,
+          truncateOutput: true,
+        }),
+        this.git.run(['--git-dir', path, 'count-objects', '-vH'], { maxOutputBytes: 32 * 1024 }),
+        this.git.run(
+          [
+            '--git-dir',
+            path,
+            'show-ref',
+            '--verify',
+            '--quiet',
+            `refs/heads/${repository.defaultBranch}`,
+          ],
+          { acceptedExitCodes: [0, 1] },
+        ),
+        this.git.run(
+          ['--git-dir', path, 'fsck', '--connectivity-only', '--no-dangling', '--no-progress'],
+          {
+            acceptedExitCodes: [0, 1],
+            maxOutputBytes: 32 * 1024,
+            truncateOutput: true,
+          },
+        ),
+      ]);
+      defaultBranchExists = defaultBranch.exitCode === 0;
+      if (!defaultBranchExists) issues.push('Default branch has no reference');
+      if (refs.truncated) issues.push('Reference inventory exceeded the report limit');
+      for (const ref of refs.stdout.toString('utf8').split('\n')) {
+        if (ref.startsWith('refs/heads/')) branches += 1;
+        else if (ref.startsWith('refs/tags/')) tags += 1;
+      }
+      const values = new Map(
+        objectCount.stdout
+          .toString('utf8')
+          .split('\n')
+          .flatMap((line) => {
+            const separator = line.indexOf(':');
+            return separator > 0
+              ? [[line.slice(0, separator).trim(), line.slice(separator + 1).trim()]]
+              : [];
+          }),
+      );
+      count = parseNonNegativeInteger(values.get('count'));
+      packs = parseNonNegativeInteger(values.get('packs'));
+      size = values.get('size-pack') ?? null;
+      if (fsck.exitCode !== 0 || fsck.truncated) issues.push('Git connectivity check failed');
+    } catch {
+      issues.push('Repository storage could not be inspected');
+    }
+    return {
+      status: issues.some((issue) => issue.includes('connectivity') || issue.includes('storage'))
+        ? 'unhealthy'
+        : issues.length > 0
+          ? 'degraded'
+          : 'healthy',
+      checkedAt,
+      archived: repository.archivedAt !== null,
+      defaultBranch: { name: repository.defaultBranch, exists: defaultBranchExists },
+      refs: { branches, tags },
+      objects: { count, size, packs },
+      issues,
+    };
   }
 
   async setPolicy(
@@ -300,6 +403,8 @@ export class RepositoryEnhancementService {
 
   async runMirror(repository: Repository, actorUserId: number | null): Promise<void> {
     if (actorUserId !== null) this.repositories.require(repository, actorUserId, 'admin');
+    if (repository.archivedAt)
+      throw new RepositoryEnhancementError('Archived repositories cannot be mirrored', 409);
     const mirror = this.mirror(repository.id);
     if (!mirror) throw new RepositoryEnhancementError('Mirror is not configured', 404);
     const path = await this.repositories.storagePath(repository);
@@ -561,6 +666,12 @@ export class RepositoryEnhancementService {
       policies.some((p) => p.blockDeletion) ? 'true' : 'false',
     ]);
   }
+}
+
+function parseNonNegativeInteger(value: string | undefined): number | null {
+  if (!value || !/^\d+$/.test(value)) return null;
+  const result = Number(value);
+  return Number.isSafeInteger(result) ? result : null;
 }
 
 function validatePolicyPattern(value: string): string {

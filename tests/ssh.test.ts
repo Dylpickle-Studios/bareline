@@ -3,6 +3,7 @@ import { AuditService } from '../src/audit/audit-service.js';
 import { AuthService } from '../src/auth/auth-service.js';
 import { openDatabase } from '../src/database/database.js';
 import { GitRunner } from '../src/git/git-runner.js';
+import { RepositoryEnhancementService } from '../src/repositories/repository-enhancement-service.js';
 import { RepositoryService } from '../src/repositories/repository-service.js';
 import {
   authorizeSshCommand,
@@ -27,7 +28,7 @@ describe('OpenSSH forced command', () => {
       config,
       audit,
     );
-    await repositories.createForUser({
+    const repository = await repositories.createForUser({
       actorUserId: user.id,
       ownerUserId: user.id,
       slug: 'example',
@@ -48,6 +49,21 @@ describe('OpenSSH forced command', () => {
       "git-receive-pack 'alice/example.git'",
     );
     expect(allowed.operation).toBe('git-receive-pack');
+    const enhancements = new RepositoryEnhancementService(
+      database,
+      new GitRunner('git', 10_000, 16 * 1024 * 1024),
+      repositories,
+      audit,
+    );
+    enhancements.setArchived(repository, user.id, true);
+    await expect(
+      authorizeSshCommand(
+        database,
+        repositories,
+        Number(key.lastInsertRowid),
+        "git-receive-pack 'alice/example.git'",
+      ),
+    ).rejects.toMatchObject({ statusCode: 403 });
     await expect(
       authorizeSshCommand(
         database,

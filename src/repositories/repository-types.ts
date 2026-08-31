@@ -29,6 +29,18 @@ export interface Repository {
   storageKind: StorageKind;
   storagePath: string | null;
   defaultBranch: string;
+  /** ISO-8601 timestamp when writes were disabled, or null while active. */
+  archivedAt: string | null;
+}
+
+export interface RepositoryHealthReport {
+  status: 'healthy' | 'degraded' | 'unhealthy';
+  checkedAt: string;
+  archived: boolean;
+  defaultBranch: { name: string; exists: boolean };
+  refs: { branches: number; tags: number };
+  objects: { count: number | null; size: string | null; packs: number | null };
+  issues: readonly string[];
 }
 
 export interface TreeEntry {

@@ -19,6 +19,15 @@ unit tests alone.
       rebinding and private/reserved-address protection; redirects are not followed
 - [x] Atomic staged backups, online SQLite snapshots including WAL sidecars, authenticated manifests,
       checksum verification, staged restore, rollback, and recoverable pre-restore data
+- [x] Explicit backup policy scheduling, bounded retention, isolated restore verification, and
+      conservative pruning of validated backup directories
+- [x] Deterministic audit exports and master-key-authenticated checkpoints for independent
+      retention and tamper-evident verification
+- [x] Archived repository write blocking across web, Git HTTP, SSH, LFS, and mirror paths, plus
+      bounded repository health reports
+- [x] Signed HTTPS repository webhooks with encrypted secrets, hostname allowlists, bounded queues,
+      finite retries, and no redirects
+- [x] Optional bounded OTLP trace export with generated trace context and no trust in client trace IDs
 - [x] Encrypted backup destination credentials, bounded HTTPS uploads, endpoint validation, and
       optional AES-256-GCM file envelopes
 - [x] Modular route registration with a typed route context, request metrics, bounded metric labels,

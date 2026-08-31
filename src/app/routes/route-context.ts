@@ -26,6 +26,7 @@ import type { RepositoryService } from '../../repositories/repository-service.js
 import type { SearchService } from '../../search/search-service.js';
 import type { SshKeyService } from '../../ssh/ssh-key-service.js';
 import type { AuthenticatedUser } from '../../auth/auth-service.js';
+import type { WebhookService } from '../../webhooks/webhook-service.js';
 
 export interface Session {
   user: AuthenticatedUser;
@@ -63,6 +64,7 @@ export interface AppRouteContext {
   pluginManager: PluginManager;
   pluginContributions: PluginContributionService;
   pluginEvents: PluginEventService;
+  webhooks: WebhookService;
   administration: AdminService;
   metrics: MetricsRegistry;
   render: (view: string, data: Record<string, unknown>) => Promise<string>;

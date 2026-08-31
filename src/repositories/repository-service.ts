@@ -33,6 +33,7 @@ interface RepositoryRow {
   storage_kind: 'hosted_bare' | 'imported_bare' | 'working_tree';
   storage_path: string | null;
   default_branch: string;
+  archived_at: string | null;
 }
 
 export class RepositoryService {
@@ -671,6 +672,7 @@ function mapRepository(row: RepositoryRow): Repository {
     storageKind: row.storage_kind,
     storagePath: row.storage_path,
     defaultBranch: row.default_branch,
+    archivedAt: row.archived_at,
   };
 }
 

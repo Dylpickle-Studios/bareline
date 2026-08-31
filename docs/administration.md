@@ -3,14 +3,20 @@
 ## Git-focused repository controls
 
 Repository settings include branch policies, read-only per-repository deploy keys, pull/push
-mirrors, and template designation. Branch policies can block force pushes and deletion, require
+mirrors, lifecycle controls, and template designation. Archiving preserves clone, browsing, and
+archive downloads while blocking web commits, Smart HTTP/SSH pushes, and mirror runs; restoring is
+an explicit admin action. The settings health report performs bounded, read-only checks of Git
+connectivity, refs, default-branch presence, and object inventory.
+
+Branch policies can block force pushes and deletion through Git receive configuration, require
 signed commits for web-write eligibility, and require a bounded literal commit-message prefix.
 Administrators can register verified OpenPGP or SSH fingerprints under Application settings;
 Bareline continues to distinguish cryptographic validity from locally assigned identity trust.
 
 Repository activity is append-oriented and deliberately limited to Git/repository events. Signed
 push policies that need full commit-chain validation should be enforced by the upstream receive
-environment; Bareline never installs repository-controlled hooks.
+environment; Bareline never installs repository-controlled hooks and refuses transport writes when
+such a policy is active.
 
 Run `bareline repo mirrors-run --config config.yml` from a systemd timer or cron job to process up
 to 50 due mirrors per invocation. Failures are recorded without preventing other due mirrors from

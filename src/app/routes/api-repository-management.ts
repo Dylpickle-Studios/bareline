@@ -13,6 +13,7 @@ export function registerApiRepositoryManagementRoutes(context: AppRouteContext):
     repositoryAdmin,
     groups,
     search,
+    webhooks,
     apiPrincipal,
     apiRepository,
   } = context;
@@ -439,6 +440,77 @@ export function registerApiRepositoryManagementRoutes(context: AppRouteContext):
     async (request, reply) => {
       const { repository } = apiRepository(request, 'repository:read', 'read');
       return reply.send({ items: enhancements.policies(repository.id) });
+    },
+  );
+
+  app.get(
+    '/api/v1/repositories/:owner/:repository/webhooks',
+    {
+      schema: routeHelpers.apiContract('repositories', {
+        params: routeHelpers.repositoryParameters,
+        response: routeHelpers.enhancementListResponse,
+      }),
+    },
+    async (request, reply) => {
+      const { repository, principal } = apiRepository(request, 'repository:read', 'read');
+      if (!principal) throw new runtime.AuthorizationError();
+      repositories.require(repository, principal.userId, 'admin');
+      return reply.send({ items: webhooks.list(repository.id) });
+    },
+  );
+
+  app.post(
+    '/api/v1/repositories/:owner/:repository/webhooks',
+    {
+      schema: routeHelpers.apiContract('repositories', {
+        success: 201,
+        params: routeHelpers.repositoryParameters,
+        response: routeHelpers.enhancementMutationResponse,
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['url', 'events'],
+          properties: {
+            url: { type: 'string', maxLength: 2048 },
+            events: { type: 'array', minItems: 1, maxItems: 16, items: { type: 'string' } },
+          },
+        },
+      }),
+    },
+    async (request, reply) => {
+      const { repository, principal } = apiRepository(request, 'repository:write', 'write');
+      if (!principal) throw new runtime.AuthorizationError();
+      repositories.require(repository, principal.userId, 'admin');
+      const body = request.body as { url: string; events: unknown };
+      return reply
+        .code(201)
+        .send(webhooks.create(repository.id, principal.userId, body.url, body.events));
+    },
+  );
+
+  app.delete(
+    '/api/v1/repositories/:owner/:repository/webhooks/:webhookId',
+    {
+      schema: routeHelpers.apiContract('repositories', {
+        success: 204,
+        params: {
+          ...routeHelpers.repositoryParameters,
+          required: ['owner', 'repository', 'webhookId'],
+          properties: {
+            ...routeHelpers.repositoryParameters.properties,
+            webhookId: { type: 'integer', minimum: 1 },
+          },
+        },
+        response: routeHelpers.enhancementMutationResponse,
+      }),
+    },
+    async (request, reply) => {
+      const { repository, principal } = apiRepository(request, 'repository:write', 'write');
+      if (!principal) throw new runtime.AuthorizationError();
+      repositories.require(repository, principal.userId, 'admin');
+      const id = Number((request.params as { webhookId: string }).webhookId);
+      webhooks.remove(repository.id, principal.userId, id);
+      return reply.code(204).send();
     },
   );
 
