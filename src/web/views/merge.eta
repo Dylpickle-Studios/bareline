@@ -1,0 +1,12 @@
+<section class="repo-shell narrow-wide">
+  <header><p class="eyebrow"><%= it.repository.ownerSlug %>/<%= it.repository.slug %></p><h1>Merge branches</h1></header>
+  <% if (!it.canWrite) { %><p class="notice">Sign in with write access to this repository to merge branches.</p><% } else { %>
+  <form method="post" action="/<%= it.repository.ownerSlug %>/<%= it.repository.slug %>/merge" class="form-stack">
+    <input type="hidden" name="csrf" value="<%= it.csrf %>">
+    <label>Merge from<select name="source"><% it.branches.forEach(function(branch) { %><option value="<%= branch.name %>" <%= branch.name === it.source ? 'selected' : '' %>><%= branch.name %></option><% }) %><% it.tags.forEach(function(tag) { %><option value="<%= tag.name %>" <%= tag.name === it.source ? 'selected' : '' %>><%= tag.name %></option><% }) %></select></label>
+    <label>Into<select name="target"><% it.branches.forEach(function(branch) { %><option value="<%= branch.name %>" <%= branch.name === it.target ? 'selected' : '' %>><%= branch.name %></option><% }) %></select></label>
+    <label>Merge commit message (used only when a fast-forward is not possible)<input name="message" maxlength="10000"></label>
+    <button class="button primary" type="submit">Merge</button>
+  </form>
+  <% } %>
+</section>

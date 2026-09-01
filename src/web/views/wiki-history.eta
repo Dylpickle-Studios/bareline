@@ -1,0 +1,10 @@
+<section class="repo-shell">
+  <header><p class="eyebrow"><%= it.repository.ownerSlug %>/<%= it.repository.slug %></p><h1>History: <%= it.page %></h1></header>
+  <% if (!it.history.length) { %><p class="muted">No history yet.</p><% } %>
+  <ol class="commit-list compact">
+    <% it.history.forEach(function(entry) { %>
+      <li><div><span><%= entry.subject %></span><p><%= entry.authorName %> · <time datetime="<%= entry.authoredAt %>"><%= entry.authoredAt %></time></p></div><span class="sha"><%= entry.shortId %></span></li>
+    <% }) %>
+  </ol>
+  <p><a href="/<%= it.repository.ownerSlug %>/<%= it.repository.slug %>/wiki/<%= encodeURIComponent(it.page) %>">Back to page</a></p>
+</section>

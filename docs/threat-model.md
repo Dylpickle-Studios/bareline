@@ -16,13 +16,20 @@ Git subprocesses, SQLite, imported roots, archive/upload parsing, and plugin run
 - **Hostile Git configuration:** system/global configuration, hooks, external diffs, attributes,
   prompts, and protocol-from-user behavior are disabled for rendering operations.
 - **Authorization bypass and metadata leaks:** capability checks are centralized; private repository
-  discovery uses non-disclosing errors; search and palette providers filter before ranking.
+  discovery uses non-disclosing errors; search and palette providers filter before ranking. The
+  issue tracker reuses this same centralized `RepositoryService.require()` check and non-disclosing
+  404s for every action, with a narrow author-own-issue exception for closing/reopening/editing.
 - **XSS:** templates escape by default; repository Markdown uses an explicit sanitizer allowlist;
   active SVG and plugin HTML are isolated or downloaded rather than embedded.
 - **CSRF/session attacks:** mutations require synchronizer tokens; opaque sessions are hashed, rotated,
   revocable, expiring, HttpOnly, SameSite, and Secure under HTTPS.
 - **Credential leakage:** passwords use Argon2id; bearer tokens are shown once and stored as digests;
   structured logs redact credential fields.
+- **Second-factor bypass/replay:** self-service TOTP is additive to password, LDAP, and plugin logins
+  (a hashed, single-use, short-lived pending-login token gates session issuance until the code is
+  verified); the same or an earlier time-step code cannot be replayed; backup codes are single-use.
+  Passkey, OIDC, and trusted-reverse-proxy logins already delegate to a strong or federated
+  authenticator and are intentionally exempt from this additional gate.
 - **Resource exhaustion:** Git operations, bodies, blobs, diffs, archives, images, search, and plugin
   calls have independent time/byte/count/concurrency limits.
 - **Malicious plugins:** trusted plugins carry an explicit host-compromise warning. Sandboxed plugins

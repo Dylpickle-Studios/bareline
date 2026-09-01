@@ -1,0 +1,61 @@
+<section class="repo-shell"><header class="repo-header"><div><p class="eyebrow"><%= it.repository.ownerSlug %>/<%= it.repository.slug %></p><h1>#<%= it.issue.number %> <%= it.issue.title %></h1></div><span class="issue-status <%= it.issue.status %>"><%= it.issue.status %></span></header>
+  <p class="muted"><%= it.issue.authorUsername || 'unknown' %> opened this issue<% if (it.issue.assigneeUsername) { %> · assigned to <%= it.issue.assigneeUsername %><% } %><% it.issue.labels.forEach(function(label) { %> <span class="issue-label" style="background:#<%= label.color %>"><%= label.name %></span><% }) %></p>
+  <article class="markdown-body"><%~ it.bodyHtml %></article>
+
+  <% if (it.canTriage || it.isAuthor) { %>
+  <details><summary>Edit issue</summary>
+    <form method="post" action="/<%= it.repository.ownerSlug %>/<%= it.repository.slug %>/issues/<%= it.issue.number %>" class="form-stack">
+      <input type="hidden" name="csrf" value="<%= it.csrf %>"><input type="hidden" name="action" value="edit">
+      <label>Title<input name="title" value="<%= it.issue.title %>" required maxlength="255"></label>
+      <label>Description<textarea name="body" rows="8" maxlength="65536"><%= it.issue.body %></textarea></label>
+      <button class="button" type="submit">Save changes</button>
+    </form>
+  </details>
+  <form method="post" action="/<%= it.repository.ownerSlug %>/<%= it.repository.slug %>/issues/<%= it.issue.number %>" class="inline">
+    <input type="hidden" name="csrf" value="<%= it.csrf %>">
+    <% if (it.issue.status === 'open') { %><input type="hidden" name="action" value="close"><button class="quiet" type="submit">Close issue</button><% } else { %><input type="hidden" name="action" value="reopen"><button class="quiet" type="submit">Reopen issue</button><% } %>
+  </form>
+  <% } %>
+
+  <% if (it.canTriage) { %>
+  <details><summary>Assign</summary>
+    <form method="post" action="/<%= it.repository.ownerSlug %>/<%= it.repository.slug %>/issues/<%= it.issue.number %>" class="inline">
+      <input type="hidden" name="csrf" value="<%= it.csrf %>"><input type="hidden" name="action" value="assign">
+      <input name="assignee" value="<%= it.issue.assigneeUsername || '' %>" placeholder="username" maxlength="39">
+      <button class="button" type="submit">Update assignee</button>
+    </form>
+  </details>
+  <% if (it.availableLabels.length) { %>
+  <details><summary>Labels</summary>
+    <form method="post" action="/<%= it.repository.ownerSlug %>/<%= it.repository.slug %>/issues/<%= it.issue.number %>" class="form-stack">
+      <input type="hidden" name="csrf" value="<%= it.csrf %>"><input type="hidden" name="action" value="label">
+      <% it.availableLabels.forEach(function(label) { %><label class="inline"><input type="checkbox" name="label:<%= label.id %>" value="on" <%= it.issue.labels.some(function(applied) { return applied.id === label.id; }) ? 'checked' : '' %>> <span class="issue-label" style="background:#<%= label.color %>"><%= label.name %></span></label><% }) %>
+      <button class="button" type="submit">Update labels</button>
+    </form>
+  </details>
+  <% } %>
+  <% } %>
+
+  <h2>Comments</h2>
+  <% it.comments.forEach(function(comment) { %>
+  <div class="issue-comment">
+    <header><span><%= comment.authorUsername || 'unknown' %></span><time datetime="<%= comment.createdAt %>"><%= comment.createdAt %></time></header>
+    <div class="markdown-body"><%~ comment.bodyHtml %></div>
+    <% if (it.canTriage || (it.user && it.user.username === comment.authorUsername)) { %>
+    <form method="post" action="/<%= it.repository.ownerSlug %>/<%= it.repository.slug %>/issues/<%= it.issue.number %>/comments/<%= comment.id %>" class="inline">
+      <input type="hidden" name="csrf" value="<%= it.csrf %>"><input type="hidden" name="action" value="remove">
+      <button class="quiet danger" data-confirm="Remove this comment?" type="submit">Delete comment</button>
+    </form>
+    <% } %>
+  </div>
+  <% }) %>
+  <% if (!it.comments.length) { %><p class="muted">No comments yet.</p><% } %>
+
+  <% if (it.user) { %>
+  <form method="post" action="/<%= it.repository.ownerSlug %>/<%= it.repository.slug %>/issues/<%= it.issue.number %>" class="form-stack">
+    <input type="hidden" name="csrf" value="<%= it.csrf %>"><input type="hidden" name="action" value="comment">
+    <label>Add a comment<textarea name="body" rows="4" required maxlength="65536"></textarea></label>
+    <button class="button primary" type="submit">Comment</button>
+  </form>
+  <% } %>
+</section>

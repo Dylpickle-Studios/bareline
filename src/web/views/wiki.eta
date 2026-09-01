@@ -1,0 +1,15 @@
+<section class="repo-shell">
+  <header><p class="eyebrow"><%= it.repository.ownerSlug %>/<%= it.repository.slug %></p><h1>Wiki</h1></header>
+  <div class="wiki-layout">
+    <aside><nav aria-label="Wiki pages"><a href="/<%= it.repository.ownerSlug %>/<%= it.repository.slug %>/wiki">Home</a><% it.pages.forEach(function(page) { %><% if (page.name !== 'Home') { %><a href="/<%= it.repository.ownerSlug %>/<%= it.repository.slug %>/wiki/<%= encodeURIComponent(page.name) %>"><%= page.name %></a><% } %><% }) %></nav>
+      <% if (it.canWrite) { %><p><a class="button" href="/<%= it.repository.ownerSlug %>/<%= it.repository.slug %>/wiki/<%= encodeURIComponent(it.page) %>/edit">Edit this page</a></p><% } %></aside>
+    <article>
+      <% if (it.content === null) { %>
+        <div class="empty"><h2><%= it.page %> has no content yet</h2><% if (it.canWrite) { %><p><a class="button primary" href="/<%= it.repository.ownerSlug %>/<%= it.repository.slug %>/wiki/<%= encodeURIComponent(it.page) %>/edit">Create this page</a></p><% } %></div>
+      <% } else { %>
+        <p class="repo-secondary-nav"><a href="/<%= it.repository.ownerSlug %>/<%= it.repository.slug %>/wiki/<%= encodeURIComponent(it.page) %>/history">Page history</a></p>
+        <div class="markdown-body"><%~ it.rendered %></div>
+      <% } %>
+    </article>
+  </div>
+</section>

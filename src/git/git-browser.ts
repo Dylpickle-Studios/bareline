@@ -2,7 +2,14 @@ import type { AppConfig } from '../config/config.js';
 import type { RepositoryService } from '../repositories/repository-service.js';
 import type { Repository } from '../repositories/repository-types.js';
 import { validateObjectId, validateRef, validateRepoPath } from '../security/validation.js';
+import { computeLanguageStats, type LanguageStat } from './language-stats.js';
 import type { GitRunner } from './git-runner.js';
+
+export interface ContributorStat {
+  name: string;
+  email: string;
+  commits: number;
+}
 
 export interface CommitSummary {
   objectId: string;
@@ -265,6 +272,106 @@ export class GitBrowser {
         this.config.limits.diffFileBytes,
       ),
     };
+  }
+
+  /** Renders a single commit as a `git format-patch` mail, suitable for `git am`. */
+  async commitPatch(repository: Repository, objectIdInput: string): Promise<string> {
+    const objectId = validateObjectId(objectIdInput);
+    const path = await this.repositories.storagePath(repository);
+    const result = await this.git.run(
+      [
+        '--git-dir',
+        path,
+        'format-patch',
+        '--stdout',
+        '--find-renames',
+        '--no-ext-diff',
+        '--no-textconv',
+        '-1',
+        '--end-of-options',
+        objectId,
+      ],
+      { maxOutputBytes: this.config.limits.diffBytes },
+    );
+    return result.stdout.toString('utf8');
+  }
+
+  /** Renders every commit reachable from `head` but not `base` as a `git format-patch` series. */
+  async comparePatch(
+    repository: Repository,
+    baseInput: string,
+    headInput: string,
+  ): Promise<string> {
+    validateRef(baseInput);
+    validateRef(headInput);
+    const path = await this.repositories.storagePath(repository);
+    const [base, head] = await Promise.all([
+      this.repositories.resolveCommit(repository, baseInput),
+      this.repositories.resolveCommit(repository, headInput),
+    ]);
+    const mergeBaseResult = await this.git.run(['--git-dir', path, 'merge-base', base, head]);
+    const mergeBase = validateObjectId(mergeBaseResult.stdout.toString('ascii').trim());
+    const result = await this.git.run(
+      [
+        '--git-dir',
+        path,
+        'format-patch',
+        '--stdout',
+        '--find-renames',
+        '--no-ext-diff',
+        '--no-textconv',
+        `${mergeBase}..${head}`,
+      ],
+      { maxOutputBytes: this.config.limits.diffBytes },
+    );
+    return result.stdout.toString('utf8');
+  }
+
+  /** Approximate per-language byte breakdown of a ref's tree, GitHub-linguist-style. */
+  async languageStats(repository: Repository, ref: string): Promise<LanguageStat[]> {
+    validateRef(ref);
+    const commit = await this.repositories.resolveCommit(repository, ref);
+    const path = await this.repositories.storagePath(repository);
+    const result = await this.git.run(
+      ['--git-dir', path, 'ls-tree', '-r', '-l', '-z', '--end-of-options', commit],
+      { maxOutputBytes: this.config.limits.gitOutputBytes },
+    );
+    const entries: { path: string; size: number }[] = [];
+    for (const entry of result.stdout.toString('utf8').split('\0')) {
+      if (!entry) continue;
+      const tabIndex = entry.indexOf('\t');
+      if (tabIndex < 0) continue;
+      const metadata = entry.slice(0, tabIndex).trim().split(/\s+/);
+      const size = Number.parseInt(metadata[3] ?? '', 10);
+      const filePath = entry.slice(tabIndex + 1);
+      if (metadata[1] === 'blob' && Number.isFinite(size)) entries.push({ path: filePath, size });
+    }
+    return computeLanguageStats(entries);
+  }
+
+  /** Commit counts per author across the whole ref, most active first. */
+  async contributors(repository: Repository, ref: string): Promise<ContributorStat[]> {
+    validateRef(ref);
+    const path = await this.repositories.storagePath(repository);
+    const result = await this.git.run([
+      '--git-dir',
+      path,
+      'shortlog',
+      '-sne',
+      '--end-of-options',
+      ref,
+    ]);
+    const contributors: ContributorStat[] = [];
+    for (const line of result.stdout.toString('utf8').split('\n')) {
+      const match = /^\s*(\d+)\t(.*) <(.*)>\s*$/.exec(line);
+      if (!match) continue;
+      contributors.push({
+        name: match[2] ?? '',
+        email: match[3] ?? '',
+        commits: Number.parseInt(match[1] ?? '0', 10),
+      });
+    }
+    return contributors;
   }
 
   async blame(repository: Repository, ref: string, file: string): Promise<BlameLine[]> {

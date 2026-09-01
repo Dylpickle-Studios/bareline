@@ -18,6 +18,7 @@ describe('Atom feeds', () => {
         storagePath: null,
         defaultBranch: 'main',
         archivedAt: null,
+        forkedFromId: null,
       },
       commits: [
         {

@@ -21,6 +21,7 @@ import { TokenService } from '../auth/token-service.js';
 import { PasskeyService } from '../auth/passkey-service.js';
 import { ExternalAuthService } from '../auth/external-auth-service.js';
 import { RecoveryService } from '../auth/recovery-service.js';
+import { TotpService } from '../auth/totp-service.js';
 import { InviteService } from '../auth/invite-service.js';
 import type { AppConfig } from '../config/config.js';
 import { openDatabase } from '../database/database.js';
@@ -40,6 +41,8 @@ import {
   PayloadTooLargeError,
   RepositoryService,
 } from '../repositories/repository-service.js';
+import { IssueService } from '../repositories/issue-service.js';
+import { ReleaseService } from '../repositories/release-service.js';
 import { RepositoryMutationService } from '../repositories/repository-mutation-service.js';
 import { RepositoryEnhancementService } from '../repositories/repository-enhancement-service.js';
 import { RepositoryAdminService } from '../repositories/repository-admin-service.js';
@@ -47,6 +50,7 @@ import { SearchService } from '../search/search-service.js';
 import { MetricsRegistry } from '../observability/metrics.js';
 import { OtlpTracing, type TraceContext } from '../observability/otlp-tracing.js';
 import { WebhookService } from '../webhooks/webhook-service.js';
+import { WikiService } from '../repositories/wiki-service.js';
 import { render as renderView } from '../web/render.js';
 import type { AppRouteContext } from './routes/route-context.js';
 import { registerAdminRoutes } from './routes/admin.js';
@@ -56,6 +60,9 @@ import { registerCoreRoutes } from './routes/core.js';
 import { registerGitRoutes } from './routes/git.js';
 import { registerNavigationRoutes } from './routes/navigation.js';
 import { registerPluginsRoutes } from './routes/plugins.js';
+import { registerRepositoryCollabRoutes } from './routes/repository-collab.js';
+import { registerReleaseHtmlRoutes } from './routes/repository-releases.js';
+import { registerWikiHtmlRoutes } from './routes/repository-wiki.js';
 import { registerRepositoryHtmlRoutes } from './routes/repositoryHtml.js';
 import { registerHealthRoutes } from './routes/health.js';
 
@@ -85,6 +92,7 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
   const passkeys = new PasskeyService(database, config, audit);
   const externalAuth = new ExternalAuthService(database, config, auth);
   const recovery = new RecoveryService(database, audit);
+  const totp = new TotpService(database, config, audit);
   const invites = new InviteService(database, audit);
   const sshKeys = new SshKeyService(database, audit);
   const git = new GitRunner(
@@ -119,6 +127,9 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
     audit,
     enhancements,
   );
+  const issues = new IssueService(database, repositories, enhancements, audit);
+  const releases = new ReleaseService(database, repositories, mutations, config, audit);
+  const wikis = new WikiService(git, repositories, config);
   const repositoryAdmin = new RepositoryAdminService(database, repositories, config, audit);
   const groups = new GroupService(database, audit);
   const search = new SearchService(database, git, repositories, browser, config);
@@ -154,6 +165,7 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
   repositories.setEventPublisher(publishRepositoryEvent);
   repositoryAdmin.setEventPublisher(publishRepositoryEvent);
   mutations.setEventPublisher(publishRepositoryEvent);
+  issues.setEventPublisher(publishRepositoryEvent);
   const administration = new AdminService(database, audit);
   const metrics = new MetricsRegistry();
   const tracing = new OtlpTracing(config.observability);
@@ -477,6 +489,7 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
     passkeys,
     externalAuth,
     recovery,
+    totp,
     invites,
     sshKeys,
     git,
@@ -485,6 +498,9 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
     referenceOptions,
     archives,
     enhancements,
+    issues,
+    releases,
+    wikis,
     mutations,
     repositoryAdmin,
     groups,
@@ -520,6 +536,9 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
   registerAdminRoutes(routeContext);
   registerNavigationRoutes(routeContext);
   registerRepositoryHtmlRoutes(routeContext);
+  registerRepositoryCollabRoutes(routeContext);
+  registerReleaseHtmlRoutes(routeContext);
+  registerWikiHtmlRoutes(routeContext);
   registerGitRoutes(routeContext);
   registerApiRoutes(routeContext);
   registerPluginsRoutes(routeContext);

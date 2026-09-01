@@ -1,6 +1,8 @@
+import type { FastifyReply } from 'fastify';
 import type { AppRouteContext } from './route-context.js';
 import * as runtime from './route-runtime.js';
 import { isAddressAllowed } from '../../security/ip-policy.js';
+import { TotpError } from '../../auth/totp-service.js';
 
 // Login, registration, federation, recovery, and public profile routes.
 export function registerAuthPublicRoutes(context: AppRouteContext): void {
@@ -11,6 +13,7 @@ export function registerAuthPublicRoutes(context: AppRouteContext): void {
     auth,
     externalAuth,
     recovery,
+    totp,
     repositories,
     pluginContributions,
     render,
@@ -19,6 +22,35 @@ export function registerAuthPublicRoutes(context: AppRouteContext): void {
     formCsrf,
     verifyFormCsrf,
   } = context;
+
+  // Shared by every password-style credential exchange (password, LDAP, plugin auth): once the
+  // primary credential is verified, either hand off to the TOTP second factor or finish the login.
+  // Reverse-proxy auth, OIDC, and passkey logins delegate to an already-trusted upstream/strong
+  // authenticator and intentionally bypass this, so they call auth.createSession directly instead.
+  const completeLogin = async (
+    reply: FastifyReply,
+    userId: number,
+    userAgent?: string,
+    totpVerified = false,
+  ) => {
+    if (!totpVerified && totp.isEnabled(userId)) {
+      const pending = totp.beginLogin(userId, userAgent);
+      reply.setCookie('totp_pending', pending.token, {
+        ...runtime.cookieOptions(config, true),
+        expires: pending.expiresAt,
+      });
+      reply.clearCookie('form_csrf', runtime.cookieOptions(config, false));
+      return await reply.redirect('/login/totp');
+    }
+    const created = auth.createSession(userId, userAgent);
+    reply.setCookie('session', created.token, {
+      ...runtime.cookieOptions(config, true),
+      expires: created.expiresAt,
+    });
+    reply.clearCookie('form_csrf', runtime.cookieOptions(config, false));
+    return await reply.redirect('/');
+  };
+
   app.get('/login', async (request, reply) => {
     return reply.type('text/html').send(
       await render('auth', {
@@ -44,13 +76,7 @@ export function registerAuthPublicRoutes(context: AppRouteContext): void {
           request.id,
           request.ip,
         );
-        const created = auth.createSession(user.id, request.headers['user-agent']);
-        reply.setCookie('session', created.token, {
-          ...runtime.cookieOptions(config, true),
-          expires: created.expiresAt,
-        });
-        reply.clearCookie('form_csrf', runtime.cookieOptions(config, false));
-        return await reply.redirect('/');
+        return await completeLogin(reply, user.id, request.headers['user-agent']);
       } catch (error) {
         if ((error as { statusCode?: number }).statusCode !== 401) throw error;
         return reply
@@ -65,6 +91,45 @@ export function registerAuthPublicRoutes(context: AppRouteContext): void {
               oidcProviders: externalAuth.providers(),
               ldapEnabled: config.authentication?.ldap?.enabled === true,
               pluginAuthProviders: pluginContributions.authenticationProviders(),
+            }),
+          );
+      }
+    },
+  );
+
+  app.get('/login/totp', async (request, reply) => {
+    if (!request.cookies.totp_pending) return await reply.redirect('/login');
+    return reply
+      .type('text/html')
+      .send(await render('login-totp', { user: null, csrf: formCsrf(request, reply) }));
+  });
+
+  app.post(
+    '/login/totp',
+    { config: { rateLimit: { max: 10, timeWindow: '15 minutes' } } },
+    async (request, reply) => {
+      const body = request.body as runtime.FormBody;
+      verifyFormCsrf(request, body.csrf);
+      const pending = request.cookies.totp_pending;
+      if (!pending) return await reply.redirect('/login');
+      try {
+        const userId = totp.completeLogin(pending, body.code ?? '');
+        reply.clearCookie('totp_pending', runtime.cookieOptions(config, true));
+        return await completeLogin(reply, userId, request.headers['user-agent'], true);
+      } catch (error) {
+        if (!(error instanceof TotpError)) throw error;
+        if (error.statusCode === 410) {
+          reply.clearCookie('totp_pending', runtime.cookieOptions(config, true));
+          return await reply.redirect('/login');
+        }
+        return reply
+          .code(error.statusCode)
+          .type('text/html')
+          .send(
+            await render('login-totp', {
+              user: null,
+              csrf: formCsrf(request, reply),
+              error: 'The authentication code was not accepted.',
             }),
           );
       }
@@ -291,13 +356,7 @@ export function registerAuthPublicRoutes(context: AppRouteContext): void {
           request.id,
           request.ip,
         );
-        const created = auth.createSession(user.id, request.headers['user-agent']);
-        reply.setCookie('session', created.token, {
-          ...runtime.cookieOptions(config, true),
-          expires: created.expiresAt,
-        });
-        reply.clearCookie('form_csrf', runtime.cookieOptions(config, false));
-        return await reply.redirect('/');
+        return await completeLogin(reply, user.id, request.headers['user-agent']);
       } catch (error) {
         if ((error as { statusCode?: number }).statusCode !== 401) throw error;
         return reply
@@ -344,13 +403,7 @@ export function registerAuthPublicRoutes(context: AppRouteContext): void {
           requestId: request.id,
           ip: request.ip,
         });
-        const created = auth.createSession(user.id, request.headers['user-agent']);
-        reply.setCookie('session', created.token, {
-          ...runtime.cookieOptions(config, true),
-          expires: created.expiresAt,
-        });
-        reply.clearCookie('form_csrf', runtime.cookieOptions(config, false));
-        return await reply.redirect('/');
+        return await completeLogin(reply, user.id, request.headers['user-agent']);
       } catch (error) {
         const status = (error as { statusCode?: number }).statusCode ?? 401;
         if (![400, 401, 403].includes(status)) throw error;

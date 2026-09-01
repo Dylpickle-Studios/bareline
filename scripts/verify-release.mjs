@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
-import { lstat, readFile, readdir } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { open, readFile, readdir } from 'node:fs/promises';
 import { arch, platform } from 'node:os';
 import { join, relative, resolve, sep } from 'node:path';
 
@@ -74,14 +75,22 @@ async function filesUnder(directory) {
         continue;
       }
       if (!entry.isFile()) throw new Error(`Release contains an unsupported entry: ${logical}`);
-      const info = await lstat(path);
-      if (!info.isFile()) throw new Error(`Release entry is not a regular file: ${logical}`);
-      result.set(
-        logical,
-        createHash('sha256')
-          .update(await readFile(path))
-          .digest('hex'),
-      );
+      // Verify and read through the same open file descriptor rather than re-resolving
+      // `path` a second time, so a symlink swapped in after the readdir/isSymbolicLink
+      // check above can't be silently followed into the checksum.
+      const handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+      try {
+        const info = await handle.stat();
+        if (!info.isFile()) throw new Error(`Release entry is not a regular file: ${logical}`);
+        result.set(
+          logical,
+          createHash('sha256')
+            .update(await handle.readFile())
+            .digest('hex'),
+        );
+      } finally {
+        await handle.close();
+      }
     }
   }
   await walk(directory);

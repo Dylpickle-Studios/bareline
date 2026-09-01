@@ -58,6 +58,15 @@ export function registerRepositorySettingsRoutes(context: AppRouteContext): void
     return await reply.redirect(`/${repository.ownerSlug}/${repository.slug}`);
   });
 
+  app.post('/:owner/:repository/star', async (request, reply) => {
+    const { repository, current } = readableRepository(request);
+    if (!current) throw new runtime.AuthorizationError();
+    const body = request.body as runtime.FormBody;
+    auth.verifyCsrf(current.csrfToken, body.csrf);
+    enhancements.star(current.user.id, repository.id, body.enabled === 'yes');
+    return await reply.redirect(`/${repository.ownerSlug}/${repository.slug}`);
+  });
+
   app.post('/:owner/:repository/settings', async (request, reply) => {
     const { repository, current } = readableRepository(request);
     if (!current) throw new runtime.AuthorizationError();

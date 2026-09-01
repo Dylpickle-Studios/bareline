@@ -3,7 +3,14 @@ import * as routeHelpers from './route-helpers.js';
 import * as runtime from './route-runtime.js';
 
 export function registerCoreRoutes(context: AppRouteContext): void {
-  const { app, auth, repositories, enhancements, render, session, requireSession } = context;
+  const { app, config, auth, repositories, enhancements, render, session, requireSession } =
+    context;
+
+  app.get('/llms.txt', async (_request, reply) => {
+    reply.header('Cache-Control', 'public, max-age=3600');
+    return reply.type('text/plain; charset=utf-8').send(runtime.llmsTxt(config.server.publicUrl));
+  });
+
   app.get('/', async (request, reply) => {
     const current = session(request);
     const accessible = current ? repositories.listAccessible(current.user.id, 1, 100) : [];

@@ -1,0 +1,18 @@
+<section class="repo-shell"><header class="repo-header"><div><p class="eyebrow"><%= it.repository.ownerSlug %>/<%= it.repository.slug %></p><h1>Labels</h1></div></header>
+  <form method="post" action="/<%= it.repository.ownerSlug %>/<%= it.repository.slug %>/labels" class="credential-form">
+    <input type="hidden" name="csrf" value="<%= it.csrf %>"><input type="hidden" name="action" value="create">
+    <label>Name<input name="name" required maxlength="50"></label>
+    <label>Color<input name="color" type="color" value="#6b7280"></label>
+    <button class="button" type="submit">Create label</button>
+  </form>
+  <ul class="credential-list">
+    <% it.labels.forEach(function(label) { %><li>
+      <span class="issue-label" style="background:#<%= label.color %>"><%= label.name %></span>
+      <form method="post" action="/<%= it.repository.ownerSlug %>/<%= it.repository.slug %>/labels" class="inline">
+        <input type="hidden" name="csrf" value="<%= it.csrf %>"><input type="hidden" name="action" value="remove"><input type="hidden" name="labelId" value="<%= label.id %>">
+        <button class="quiet danger" data-confirm="Remove this label?" type="submit">Remove</button>
+      </form>
+    </li><% }) %>
+  </ul>
+  <% if (!it.labels.length) { %><p class="muted">No labels yet.</p><% } %>
+</section>

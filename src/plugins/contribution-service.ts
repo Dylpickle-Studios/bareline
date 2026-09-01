@@ -56,6 +56,16 @@ const authenticationIdentitySchema = z
 
 export type ContributionView = z.infer<typeof contributionViewSchema>;
 
+/**
+ * Looks up an id-selected handler without falling through to inherited
+ * `Object.prototype` members (`constructor`, `toString`, `valueOf`, ...), which are
+ * themselves functions and would otherwise pass a bare `typeof handler === 'function'`
+ * check for an id a plugin never registered.
+ */
+function ownHandler<T>(record: Record<string, T> | undefined, id: string): T | undefined {
+  return record && Object.hasOwn(record, id) ? record[id] : undefined;
+}
+
 export class PluginContributionService {
   constructor(
     private readonly plugins: PluginManager,
@@ -200,7 +210,7 @@ export class PluginContributionService {
     const module = (await import(
       `${pathToFileURL(await this.plugins.entrypoint(pluginId)).href}?v=${encodeURIComponent(plugin.version)}`
     )) as { fileRenderers?: Record<string, (value: unknown) => unknown> };
-    const handler = module.fileRenderers?.[rendererId];
+    const handler = ownHandler(module.fileRenderers, rendererId);
     if (typeof handler !== 'function')
       throw new PluginContributionError('Trusted file renderer is unavailable');
     return contributionViewSchema.parse(await handler(context));
@@ -358,7 +368,7 @@ export class PluginContributionService {
     const module = (await import(
       `${pathToFileURL(await this.plugins.entrypoint(pluginId)).href}?v=${encodeURIComponent(plugin.version)}`
     )) as { adminPages?: Record<string, (value: unknown) => unknown> };
-    const handler = module.adminPages?.[pageId];
+    const handler = ownHandler(module.adminPages, pageId);
     if (typeof handler !== 'function')
       throw new PluginContributionError('Trusted administrator page is unavailable');
     return contributionViewSchema.parse(await handler(context));
@@ -387,7 +397,7 @@ export class PluginContributionService {
     )) as {
       commands?: Record<string, (context: { user: { id: string; username: string } }) => unknown>;
     };
-    const handler = module.commands?.[commandId];
+    const handler = ownHandler(module.commands, commandId);
     if (typeof handler !== 'function')
       throw new PluginContributionError('Trusted command handler is unavailable');
     return contributionViewSchema.parse(
@@ -418,7 +428,7 @@ export class PluginContributionService {
     const module = (await import(
       `${pathToFileURL(await this.plugins.entrypoint(pluginId)).href}?v=${encodeURIComponent(plugin.version)}`
     )) as { restEndpoints?: Record<string, (value: unknown) => unknown> };
-    const handler = module.restEndpoints?.[endpointId];
+    const handler = ownHandler(module.restEndpoints, endpointId);
     if (typeof handler !== 'function')
       throw new PluginContributionError('Trusted REST handler is unavailable');
     return safeJson(
@@ -506,7 +516,7 @@ export class PluginContributionService {
     )) as {
       repositoryTabs?: Record<string, (host: PluginHost) => unknown>;
     };
-    const handler = module.repositoryTabs?.[tabId];
+    const handler = ownHandler(module.repositoryTabs, tabId);
     if (typeof handler !== 'function')
       throw new PluginContributionError('Trusted tab handler is unavailable');
     return contributionViewSchema.parse(await handler(this.trustedHost(pluginId, repository)));
@@ -554,7 +564,7 @@ export class PluginContributionService {
     const module = (await import(
       `${pathToFileURL(await this.plugins.entrypoint(pluginId)).href}?v=${encodeURIComponent(version)}`
     )) as { searchProviders?: Record<string, (value: unknown) => unknown> };
-    const handler = module.searchProviders?.[providerId];
+    const handler = ownHandler(module.searchProviders, providerId);
     if (typeof handler !== 'function')
       throw new PluginContributionError('Trusted search provider is unavailable');
     return await handler(context);
@@ -570,7 +580,7 @@ export class PluginContributionService {
     const module = (await import(
       `${pathToFileURL(await this.plugins.entrypoint(pluginId)).href}?v=${encodeURIComponent(version)}`
     )) as { markdownExtensions?: Record<string, (value: unknown) => unknown> };
-    const handler = module.markdownExtensions?.[extensionId];
+    const handler = ownHandler(module.markdownExtensions, extensionId);
     if (typeof handler !== 'function')
       throw new PluginContributionError('Trusted Markdown extension is unavailable');
     return await handler(context);
@@ -586,7 +596,7 @@ export class PluginContributionService {
     const module = (await import(
       `${pathToFileURL(await this.plugins.entrypoint(pluginId)).href}?v=${encodeURIComponent(version)}`
     )) as { authenticationProviders?: Record<string, (value: unknown) => unknown> };
-    const handler = module.authenticationProviders?.[providerId];
+    const handler = ownHandler(module.authenticationProviders, providerId);
     if (typeof handler !== 'function')
       throw new PluginContributionError('Trusted authentication provider is unavailable');
     return await handler(context);

@@ -5,7 +5,7 @@ import { OutboundPolicy } from '../security/outbound-policy.js';
 import { SecretBox } from '../security/secret-box.js';
 import type { AuditService } from '../audit/audit-service.js';
 
-const EVENT_NAME = /^(repository|branch|tag|commit)\.[A-Za-z][A-Za-z0-9]*$/;
+const EVENT_NAME = /^(repository|branch|tag|commit|issue)\.[A-Za-z][A-Za-z0-9]*$/;
 
 export class WebhookError extends Error {
   readonly statusCode = 400;

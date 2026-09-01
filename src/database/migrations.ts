@@ -525,4 +525,118 @@ export const migrations: readonly Migration[] = [
       CREATE INDEX webhook_deliveries_ready ON webhook_deliveries(state, available_at, lease_until);
     `,
   },
+  {
+    version: 18,
+    name: 'totp_second_factor',
+    sql: `
+      CREATE TABLE totp_credentials (
+        user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        secret_encrypted BLOB NOT NULL,
+        confirmed_at TEXT,
+        last_used_step INTEGER,
+        created_at TEXT NOT NULL
+      ) STRICT;
+      CREATE TABLE totp_backup_codes (
+        id INTEGER PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        code_hash BLOB NOT NULL,
+        created_at TEXT NOT NULL
+      ) STRICT;
+      CREATE INDEX totp_backup_codes_user ON totp_backup_codes(user_id);
+      CREATE TABLE totp_pending_logins (
+        token_hash BLOB PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        user_agent TEXT,
+        expires_at TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      ) STRICT;
+      CREATE INDEX totp_pending_logins_expiry ON totp_pending_logins(expires_at);
+    `,
+  },
+  {
+    version: 19,
+    name: 'issue_tracker',
+    sql: `
+      ALTER TABLE repositories ADD COLUMN next_issue_number INTEGER NOT NULL DEFAULT 1;
+      CREATE TABLE issues (
+        id INTEGER PRIMARY KEY,
+        repository_id INTEGER NOT NULL REFERENCES repositories(id) ON DELETE CASCADE,
+        number INTEGER NOT NULL,
+        title TEXT NOT NULL CHECK(length(title) BETWEEN 1 AND 255),
+        body TEXT NOT NULL DEFAULT '' CHECK(length(body) <= 65536),
+        status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'closed')),
+        author_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        assignee_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        closed_at TEXT
+      ) STRICT;
+      CREATE UNIQUE INDEX issues_repository_number ON issues(repository_id, number);
+      CREATE INDEX issues_repository_status ON issues(repository_id, status, number DESC);
+      CREATE INDEX issues_assignee ON issues(assignee_user_id);
+      CREATE TABLE issue_comments (
+        id INTEGER PRIMARY KEY,
+        issue_id INTEGER NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+        author_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        body TEXT NOT NULL CHECK(length(body) <= 65536),
+        created_at TEXT NOT NULL,
+        updated_at TEXT
+      ) STRICT;
+      CREATE INDEX issue_comments_issue ON issue_comments(issue_id, created_at, id);
+      CREATE TABLE issue_labels (
+        id INTEGER PRIMARY KEY,
+        repository_id INTEGER NOT NULL REFERENCES repositories(id) ON DELETE CASCADE,
+        name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 50),
+        color TEXT NOT NULL DEFAULT '6b7280' CHECK(color GLOB '[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]'),
+        created_at TEXT NOT NULL
+      ) STRICT;
+      CREATE UNIQUE INDEX issue_labels_repository_name ON issue_labels(repository_id, name COLLATE NOCASE);
+      CREATE TABLE issue_label_assignments (
+        issue_id INTEGER NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+        label_id INTEGER NOT NULL REFERENCES issue_labels(id) ON DELETE CASCADE,
+        PRIMARY KEY(issue_id, label_id)
+      ) WITHOUT ROWID, STRICT;
+      CREATE INDEX issue_label_assignments_label ON issue_label_assignments(label_id);
+    `,
+  },
+  {
+    version: 20,
+    name: 'forks_stars_releases',
+    sql: `
+      ALTER TABLE repositories ADD COLUMN forked_from_id INTEGER REFERENCES repositories(id) ON DELETE SET NULL;
+      CREATE INDEX repositories_forked_from ON repositories(forked_from_id);
+
+      CREATE TABLE repository_stars (
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        repository_id INTEGER NOT NULL REFERENCES repositories(id) ON DELETE CASCADE,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (user_id, repository_id)
+      ) WITHOUT ROWID, STRICT;
+      CREATE INDEX repository_stars_repository ON repository_stars(repository_id);
+
+      CREATE TABLE releases (
+        id INTEGER PRIMARY KEY,
+        repository_id INTEGER NOT NULL REFERENCES repositories(id) ON DELETE CASCADE,
+        tag_name TEXT NOT NULL,
+        name TEXT NOT NULL DEFAULT '' CHECK(length(name) <= 255),
+        body TEXT NOT NULL DEFAULT '' CHECK(length(body) <= 65536),
+        object_id TEXT NOT NULL,
+        created_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL
+      ) STRICT;
+      CREATE UNIQUE INDEX releases_repository_tag ON releases(repository_id, tag_name);
+      CREATE INDEX releases_repository_created ON releases(repository_id, created_at DESC);
+
+      CREATE TABLE release_assets (
+        id INTEGER PRIMARY KEY,
+        release_id INTEGER NOT NULL REFERENCES releases(id) ON DELETE CASCADE,
+        filename TEXT NOT NULL CHECK(length(filename) BETWEEN 1 AND 255),
+        content_type TEXT NOT NULL DEFAULT 'application/octet-stream',
+        size INTEGER NOT NULL CHECK(size >= 0),
+        storage_key TEXT NOT NULL UNIQUE,
+        created_at TEXT NOT NULL
+      ) STRICT;
+      CREATE INDEX release_assets_release ON release_assets(release_id);
+    `,
+  },
 ];

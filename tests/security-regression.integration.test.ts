@@ -1,11 +1,29 @@
+import { createHmac, randomBytes } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { createApp } from '../src/app/create-app.js';
 import { AuditService } from '../src/audit/audit-service.js';
 import { AuthService } from '../src/auth/auth-service.js';
+import { TotpService } from '../src/auth/totp-service.js';
 import { openDatabase } from '../src/database/database.js';
 import { GitRunner } from '../src/git/git-runner.js';
 import { RepositoryService } from '../src/repositories/repository-service.js';
+import { base32Decode } from '../src/security/base32.js';
 import { temporaryConfig } from './helpers.js';
+
+function codeForSecret(secret: string): string {
+  const key = base32Decode(secret);
+  const step = Math.floor(Date.now() / 1000 / 30);
+  const counter = Buffer.alloc(8);
+  counter.writeBigUInt64BE(BigInt(step));
+  const digest = createHmac('sha1', key).update(counter).digest();
+  const offset = (digest[digest.length - 1] ?? 0) & 0x0f;
+  const binary =
+    (((digest[offset] ?? 0) & 0x7f) << 24) |
+    (((digest[offset + 1] ?? 0) & 0xff) << 16) |
+    (((digest[offset + 2] ?? 0) & 0xff) << 8) |
+    ((digest[offset + 3] ?? 0) & 0xff);
+  return String(binary % 1_000_000).padStart(6, '0');
+}
 
 describe('cross-boundary security regressions', () => {
   it('does not disclose private repositories and rejects session mutations without CSRF', async () => {
@@ -59,6 +77,45 @@ describe('cross-boundary security regressions', () => {
         },
       });
       expect(csrf.statusCode).toBe(403);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('keeps the pending-2FA cookie httpOnly and never discloses whether an account requires it', async () => {
+    const config = temporaryConfig();
+    config.registration.mode = 'open';
+    config.security.masterKey = randomBytes(32).toString('base64url');
+    const database = openDatabase(config.database.path);
+    const audit = new AuditService(database);
+    const auth = new AuthService(database, config, audit);
+    const user = await auth.register({
+      username: 'alice',
+      displayName: 'Alice',
+      password: 'correct horse battery staple',
+    });
+    const totp = new TotpService(database, config, audit);
+    const enrollment = await totp.beginEnrollment(user.id, 'alice');
+    totp.confirmEnrollment(user.id, codeForSecret(enrollment.secret));
+    database.close();
+
+    const app = await createApp(config);
+    try {
+      const withoutAttempt = await app.inject({ method: 'GET', url: '/login/totp' });
+      expect(withoutAttempt.statusCode).toBe(302);
+      expect(withoutAttempt.headers.location).toBe('/login');
+
+      const loginPage = await app.inject({ method: 'GET', url: '/login' });
+      const csrf = /name="csrf" value="([^"]+)"/.exec(loginPage.body)?.[1];
+      const formCsrf = loginPage.cookies.find((cookie) => cookie.name === 'form_csrf')?.value;
+      const login = await app.inject({
+        method: 'POST',
+        url: '/login',
+        headers: { cookie: `form_csrf=${formCsrf ?? ''}` },
+        payload: { csrf, username: 'alice', password: 'correct horse battery staple' },
+      });
+      const pendingCookie = login.cookies.find((cookie) => cookie.name === 'totp_pending');
+      expect(pendingCookie?.httpOnly).toBe(true);
     } finally {
       await app.close();
     }

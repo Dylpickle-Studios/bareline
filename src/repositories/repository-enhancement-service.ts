@@ -648,6 +648,45 @@ export class RepositoryEnhancementService {
     ).map((row) => row.id);
   }
 
+  star(userId: number, repositoryId: number, enabled: boolean): void {
+    if (enabled)
+      this.database
+        .prepare(
+          `INSERT INTO repository_stars(user_id, repository_id, created_at)
+      VALUES (?, ?, ?) ON CONFLICT(user_id, repository_id) DO NOTHING`,
+        )
+        .run(userId, repositoryId, new Date().toISOString());
+    else
+      this.database
+        .prepare('DELETE FROM repository_stars WHERE user_id=? AND repository_id=?')
+        .run(userId, repositoryId);
+  }
+
+  isStarred(userId: number, repositoryId: number): boolean {
+    return (
+      this.database
+        .prepare('SELECT 1 FROM repository_stars WHERE user_id=? AND repository_id=?')
+        .get(userId, repositoryId) !== undefined
+    );
+  }
+
+  starCount(repositoryId: number): number {
+    const row = this.database
+      .prepare('SELECT count(*) AS count FROM repository_stars WHERE repository_id=?')
+      .get(repositoryId) as { count: number };
+    return row.count;
+  }
+
+  starredIds(userId: number): number[] {
+    return (
+      this.database
+        .prepare(
+          'SELECT repository_id AS id FROM repository_stars WHERE user_id=? ORDER BY created_at DESC',
+        )
+        .all(userId) as { id: number }[]
+    ).map((row) => row.id);
+  }
+
   private async syncReceivePolicy(repository: Repository): Promise<void> {
     const policies = this.policies(repository.id);
     const path = await this.repositories.storagePath(repository);

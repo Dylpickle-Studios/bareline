@@ -7,11 +7,19 @@ export type RepositoryEventPublisher = (
     | 'repository.deleted'
     | 'repository.renamed'
     | 'repository.visibilityChanged'
+    | 'repository.forked'
     | 'branch.created'
     | 'branch.deleted'
+    | 'branch.merged'
     | 'tag.created'
     | 'tag.deleted'
-    | 'commit.createdViaWeb',
+    | 'release.created'
+    | 'release.deleted'
+    | 'commit.createdViaWeb'
+    | 'commit.cherryPickedViaWeb'
+    | 'commit.revertedViaWeb'
+    | 'patch.importedViaWeb'
+    | 'wiki.pageUpdatedViaWeb',
   payload: Readonly<Record<string, unknown>>,
 ) => void;
 export type StorageKind = 'hosted_bare' | 'imported_bare' | 'working_tree';
@@ -31,6 +39,8 @@ export interface Repository {
   defaultBranch: string;
   /** ISO-8601 timestamp when writes were disabled, or null while active. */
   archivedAt: string | null;
+  /** Id of the repository this one was forked from, or null if it is not a fork. */
+  forkedFromId: number | null;
 }
 
 export interface RepositoryHealthReport {

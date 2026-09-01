@@ -185,7 +185,9 @@ export class SearchService {
                 ? `/${repository.ownerSlug}/${repository.slug}/tree?ref=${encodeURIComponent(row.path)}`
                 : row.resource_type === 'tag'
                   ? `/${repository.ownerSlug}/${repository.slug}/tree?ref=${encodeURIComponent(row.path)}`
-                  : `/${repository.ownerSlug}/${repository.slug}`,
+                  : row.resource_type === 'issue'
+                    ? `/${repository.ownerSlug}/${repository.slug}/issues/${row.resource_id}`
+                    : `/${repository.ownerSlug}/${repository.slug}`,
       });
       if (results.length >= limit) break;
     }
@@ -350,6 +352,19 @@ export class SearchService {
           content,
         });
       }
+    }
+    const issueRows = this.database
+      .prepare('SELECT number, title, body, status FROM issues WHERE repository_id = ?')
+      .all(repository.id) as { number: number; title: string; body: string; status: string }[];
+    for (const issue of issueRows) {
+      documents.push({
+        resourceType: 'issue',
+        resourceId: String(issue.number),
+        repositoryId: repository.id,
+        title: `#${String(issue.number)} ${issue.title}`,
+        path: '',
+        content: `${issue.body} ${issue.status}`,
+      });
     }
     return documents;
   }

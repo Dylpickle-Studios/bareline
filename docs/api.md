@@ -42,6 +42,11 @@ Endpoints must be HTTPS and their hostname must be configured in `webhooks.allow
 records do not expose that secret. Receivers should require the `x-bareline-signature-256`,
 `x-bareline-event`, and `x-bareline-delivery` headers before accepting a payload.
 
+`/api/v1/repositories/:owner/:repository/issues` and `/labels` expose the repository issue tracker:
+listing/filtering, creation, comments, labels, and assignment, with the same author-or-write
+permission rules as the HTML UI (see [Administration](administration.md#issue-tracker)). Full
+request/response shapes are generated from the OpenAPI document at `/api/docs`.
+
 ## Users, groups, and administration
 
 User responses omit credentials and hidden email. Group responses are limited to members and expose

@@ -1,0 +1,10 @@
+<section class="repo-shell">
+  <header><p class="eyebrow"><%= it.repository.ownerSlug %>/<%= it.repository.slug %></p><h1>Releases</h1></header>
+  <% if (it.canWrite) { %><p><a class="button primary" href="/<%= it.repository.ownerSlug %>/<%= it.repository.slug %>/releases/new">Draft a new release</a></p><% } %>
+  <% if (!it.releaseList.length) { %><div class="empty"><p>No releases yet.</p></div><% } %>
+  <ul class="ref-list">
+    <% it.releaseList.forEach(function(release) { %>
+      <li><a class="commit-subject" href="/<%= it.repository.ownerSlug %>/<%= it.repository.slug %>/releases/<%= encodeURIComponent(release.tagName) %>"><%= release.name || release.tagName %></a><span class="muted"><code><%= release.tagName %></code> · <time datetime="<%= release.createdAt %>"><%= release.createdAt %></time> · <%= release.assetCount %> asset<%= release.assetCount === 1 ? '' : 's' %></span></li>
+    <% }) %>
+  </ul>
+</section>

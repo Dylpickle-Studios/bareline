@@ -622,6 +622,54 @@ fieldset {
   background: var(--surface-raised);
   font-weight: 700;
 }
+.wiki-layout {
+  display: grid;
+  grid-template-columns: 15rem minmax(0, 1fr);
+  gap: 2rem;
+}
+.wiki-layout aside {
+  position: sticky;
+  inset-block-start: 1rem;
+  align-self: start;
+}
+.wiki-layout nav {
+  display: grid;
+  gap: 0.2rem;
+}
+.wiki-layout nav a {
+  padding: 0.45rem 0.6rem;
+  border-radius: var(--radius);
+  text-decoration: none;
+}
+.language-bar {
+  display: flex;
+  block-size: 0.6rem;
+  border-radius: 999px;
+  overflow: clip;
+  background: var(--surface-raised);
+}
+.language-bar span {
+  block-size: 100%;
+}
+.language-legend {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1.2rem;
+  margin: 0.75rem 0;
+  padding: 0;
+}
+.language-legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.language-swatch {
+  inline-size: 0.7rem;
+  block-size: 0.7rem;
+  border-radius: 50%;
+  display: inline-block;
+}
 #palette-results {
   display: grid;
   max-block-size: min(60vh, 30rem);
@@ -931,6 +979,82 @@ fieldset {
   color: var(--muted);
   font-size: 0.82rem;
 }
+.issue-list {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.issue-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0.9rem;
+  border-block-start: 1px solid var(--border);
+}
+.issue-list li:first-child {
+  border-block-start: 0;
+}
+.issue-list p {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.issue-status {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+.issue-status.open {
+  color: var(--accent-strong);
+  background: var(--diff-add-bg);
+}
+.issue-status.closed {
+  color: var(--danger);
+  background: var(--diff-delete-bg);
+}
+.issue-label {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+.issue-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+.issue-filters label {
+  display: grid;
+  gap: 0.35rem;
+  font-weight: 650;
+}
+.issue-comment {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin: 1rem 0;
+  overflow: hidden;
+}
+.issue-comment header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.6rem 0.9rem;
+  background: var(--surface-subtle);
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.issue-comment .markdown-body {
+  padding: 0.9rem;
+}
 .one-time-secret {
   display: grid;
   gap: 0.75rem;
@@ -1223,6 +1347,18 @@ mark {
   display: flex;
   gap: 1rem;
   align-items: center;
+}
+.commit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-end;
+  margin-block: 0.75rem;
+}
+.commit-actions form {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
 }
 .commit-metadata {
   display: grid;

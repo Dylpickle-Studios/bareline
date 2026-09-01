@@ -1,0 +1,12 @@
+<section class="repo-shell narrow-wide">
+  <header><p class="eyebrow">Fork</p><h1><%= it.repository.ownerSlug %>/<%= it.repository.slug %></h1></header>
+  <p class="muted">Creates an independent copy of every branch and tag in a new repository you own, so you can make changes and later export a patch back to the original.</p>
+  <% if (it.error) { %><div class="notice error" role="alert"><%= it.error %></div><% } %>
+  <form method="post" action="/<%= it.repository.ownerSlug %>/<%= it.repository.slug %>/fork" class="form-stack">
+    <input type="hidden" name="csrf" value="<%= it.csrf %>">
+    <% if (it.groups.length) { %><label>Owner<select name="owner"><option value="user:<%= it.user.username %>">@<%= it.user.username %></option><% it.groups.forEach(function(group) { %><option value="group:<%= group.slug %>"><%= group.slug %></option><% }) %></select></label><% } %>
+    <label>Repository name<input name="slug" value="<%= it.slug %>" required maxlength="39" pattern="[a-z0-9][a-z0-9-]*"></label>
+    <label>Visibility<select name="visibility"><option value="public" <%= it.repository.visibility === 'public' ? 'selected' : '' %>>Public</option><option value="private" <%= it.repository.visibility === 'private' ? 'selected' : '' %>>Private</option></select></label>
+    <button class="button primary" type="submit">Create fork</button>
+  </form>
+</section>

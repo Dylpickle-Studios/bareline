@@ -49,7 +49,8 @@ security:
   sessionDays: 14
   repositoryTrashDays: 7
   # Set through an environment substitution in production, for example: ${BARELINE_MASTER_KEY}
-  # Generate 32 random bytes encoded as base64url. Required for encrypted plugin/provider secrets.
+  # Generate 32 random bytes encoded as base64url. Required for encrypted plugin/provider secrets,
+  # webhook signing secrets, OIDC PKCE state, and two-factor authentication (TOTP) secrets.
   # masterKey: ${BARELINE_MASTER_KEY}
 plugins:
   # Remote installation is denied unless the source is explicitly allowlisted.

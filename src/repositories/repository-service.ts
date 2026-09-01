@@ -34,6 +34,7 @@ interface RepositoryRow {
   storage_path: string | null;
   default_branch: string;
   archived_at: string | null;
+  forked_from_id: number | null;
 }
 
 export class RepositoryService {
@@ -500,6 +501,11 @@ export class RepositoryService {
     const sourcePath = await this.storagePath(source);
     const targetPath = await this.storagePath(target);
     await this.git.run([
+      // Both paths are server-controlled storage, not attacker input, so this local fetch is
+      // exempted from the blanket `protocol.file.allow=never` hardening applied to every other
+      // Git invocation (which exists to stop a malicious .gitmodules from reaching local disk).
+      '-c',
+      'protocol.file.allow=always',
       '--git-dir',
       targetPath,
       'fetch',
@@ -519,6 +525,78 @@ export class RepositoryService {
     this.database
       .prepare('UPDATE repositories SET default_branch=?, updated_at=? WHERE id=?')
       .run(source.defaultBranch, new Date().toISOString(), target.id);
+  }
+
+  /** Creates a new repository owned by `ownerType`/`ownerId`, cloned from every ref of `source`. */
+  async fork(input: {
+    actorUserId: number;
+    source: Repository;
+    ownerType: 'user' | 'group';
+    ownerId: number;
+    slug: string;
+    visibility: Visibility;
+  }): Promise<Repository> {
+    this.require(input.source, input.actorUserId, 'read');
+    const created =
+      input.ownerType === 'group'
+        ? await this.createForGroup({
+            actorUserId: input.actorUserId,
+            ownerGroupId: input.ownerId,
+            slug: input.slug,
+            description: input.source.description,
+            visibility: input.visibility,
+          })
+        : await this.createForUser({
+            actorUserId: input.actorUserId,
+            ownerUserId: input.ownerId,
+            slug: input.slug,
+            description: input.source.description,
+            visibility: input.visibility,
+          });
+    try {
+      await this.populateFromTemplate(created, input.source);
+    } catch (error) {
+      await this.discardFailedCreation(created).catch(() => undefined);
+      throw error;
+    }
+    this.database
+      .prepare('UPDATE repositories SET forked_from_id = ? WHERE id = ?')
+      .run(input.source.id, created.id);
+    const repository = this.getById(created.id);
+    this.audit.record({
+      actorUserId: input.actorUserId,
+      action: 'repository.forked',
+      targetType: 'repository',
+      targetId: String(repository.id),
+      metadata: { sourceId: input.source.id },
+    });
+    this.publishEvent('repository.forked', {
+      ...repositoryEvent(repository),
+      sourceRepositoryId: input.source.id,
+    });
+    return repository;
+  }
+
+  countForks(repositoryId: number): number {
+    const row = this.database
+      .prepare(
+        'SELECT count(*) AS count FROM repositories WHERE forked_from_id = ? AND deleted_at IS NULL',
+      )
+      .get(repositoryId) as { count: number };
+    return row.count;
+  }
+
+  /** Commit author/committer identity for an active user, with a noreply email fallback. */
+  identityFor(userId: number): { displayName: string; email: string } | null {
+    const actor = this.database
+      .prepare('SELECT username, display_name, email FROM users WHERE id = ? AND status = ?')
+      .get(userId, 'active') as
+      { username: string; display_name: string; email: string | null } | undefined;
+    if (!actor) return null;
+    return {
+      displayName: actor.display_name,
+      email: actor.email ?? `${actor.username}@users.noreply.local`,
+    };
   }
 
   async discardFailedCreation(repository: Repository): Promise<void> {
@@ -673,6 +751,7 @@ function mapRepository(row: RepositoryRow): Repository {
     storagePath: row.storage_path,
     defaultBranch: row.default_branch,
     archivedAt: row.archived_at,
+    forkedFromId: row.forked_from_id,
   };
 }
 

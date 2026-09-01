@@ -1,0 +1,22 @@
+<section class="repo-shell"><header class="repo-header"><div><p class="eyebrow"><%= it.repository.ownerSlug %>/<%= it.repository.slug %></p><h1>Issues</h1></div><% if (it.canReport) { %><a class="button primary" href="/<%= it.repository.ownerSlug %>/<%= it.repository.slug %>/issues/new">New issue</a><% } %></header>
+  <form class="issue-filters" method="get">
+    <label>Status<select name="status"><option value="open" <%= it.filters.status === 'open' ? 'selected' : '' %>>Open</option><option value="closed" <%= it.filters.status === 'closed' ? 'selected' : '' %>>Closed</option><option value="all" <%= it.filters.status === 'all' ? 'selected' : '' %>>All</option></select></label>
+    <label>Label<select name="label"><option value="">Any</option><% it.labels.forEach(function(label) { %><option value="<%= label.name %>" <%= it.filters.label === label.name ? 'selected' : '' %>><%= label.name %></option><% }) %></select></label>
+    <label>Assignee<input name="assignee" value="<%= it.filters.assignee %>" placeholder="username" maxlength="39"></label>
+    <button class="button" type="submit">Filter</button>
+  </form>
+  <ul class="issue-list">
+    <% it.items.forEach(function(issue) { %><li>
+      <div>
+        <a href="/<%= it.repository.ownerSlug %>/<%= it.repository.slug %>/issues/<%= issue.number %>"><strong>#<%= issue.number %> <%= issue.title %></strong></a>
+        <p><%= issue.authorUsername || 'unknown' %> opened this issue<% if (issue.assigneeUsername) { %> · assigned to <%= issue.assigneeUsername %><% } %><% issue.labels.forEach(function(label) { %> <span class="issue-label" style="background:#<%= label.color %>"><%= label.name %></span><% }) %></p>
+      </div>
+      <span class="issue-status <%= issue.status %>"><%= issue.status %></span>
+    </li><% }) %>
+  </ul>
+  <% if (!it.items.length) { %><div class="empty"><h2>No issues</h2><p>No issues match the current filters.</p></div><% } %>
+  <nav class="issue-pagination">
+    <% if (it.pagination.page > 1) { %><a href="?status=<%= it.filters.status %>&label=<%= encodeURIComponent(it.filters.label) %>&assignee=<%= encodeURIComponent(it.filters.assignee) %>&page=<%= it.pagination.page - 1 %>">Previous</a><% } %>
+    <% if (it.pagination.hasMore) { %><a href="?status=<%= it.filters.status %>&label=<%= encodeURIComponent(it.filters.label) %>&assignee=<%= encodeURIComponent(it.filters.assignee) %>&page=<%= it.pagination.page + 1 %>">Next</a><% } %>
+  </nav>
+</section>

@@ -1,0 +1,17 @@
+<section class="settings-shell">
+  <nav class="settings-nav" aria-label="User settings"><a href="/settings/profile">Profile</a><a aria-current="page" href="/settings/credentials">Git credentials</a><a href="/settings/appearance">Appearance</a><a href="/settings/sessions">Sessions</a></nav>
+  <div class="settings-content">
+    <header><p class="eyebrow">User settings</p><h1>Set up two-factor authentication</h1></header>
+    <% if (it.error) { %><div class="notice error" role="alert"><%= it.error %></div><% } %>
+    <section>
+      <p>Scan this code with an authenticator app (1Password, Authy, Google Authenticator, ...), or enter the secret manually.</p>
+      <img src="<%= it.qrCodeDataUrl %>" width="200" height="200" alt="Two-factor authentication QR code">
+      <p>Secret: <code><%= it.secret %></code></p>
+      <form method="post" class="form-stack">
+        <input type="hidden" name="csrf" value="<%= it.csrf ?? '' %>">
+        <label>Confirm the 6-digit code from your app<input name="code" inputmode="numeric" autocomplete="one-time-code" autofocus required maxlength="6"></label>
+        <button class="button primary" type="submit">Confirm and enable</button>
+      </form>
+    </section>
+  </div>
+</section>

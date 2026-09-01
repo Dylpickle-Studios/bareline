@@ -8,6 +8,7 @@ import type { InviteService } from '../../auth/invite-service.js';
 import type { PasskeyService } from '../../auth/passkey-service.js';
 import type { RecoveryService } from '../../auth/recovery-service.js';
 import type { TokenService, VerifiedToken } from '../../auth/token-service.js';
+import type { TotpService } from '../../auth/totp-service.js';
 import type { AppConfig } from '../../config/config.js';
 import type { Database } from '../../database/database.js';
 import type { ArchiveService } from '../../git/archive-service.js';
@@ -19,6 +20,8 @@ import type { MetricsRegistry } from '../../observability/metrics.js';
 import type { PluginContributionService } from '../../plugins/contribution-service.js';
 import type { PluginEventService } from '../../plugins/event-service.js';
 import type { PluginManager } from '../../plugins/plugin-manager.js';
+import type { IssueService } from '../../repositories/issue-service.js';
+import type { ReleaseService } from '../../repositories/release-service.js';
 import type { RepositoryAdminService } from '../../repositories/repository-admin-service.js';
 import type { RepositoryEnhancementService } from '../../repositories/repository-enhancement-service.js';
 import type { RepositoryMutationService } from '../../repositories/repository-mutation-service.js';
@@ -27,6 +30,7 @@ import type { SearchService } from '../../search/search-service.js';
 import type { SshKeyService } from '../../ssh/ssh-key-service.js';
 import type { AuthenticatedUser } from '../../auth/auth-service.js';
 import type { WebhookService } from '../../webhooks/webhook-service.js';
+import type { WikiService } from '../../repositories/wiki-service.js';
 
 export interface Session {
   user: AuthenticatedUser;
@@ -45,6 +49,7 @@ export interface AppRouteContext {
   passkeys: PasskeyService;
   externalAuth: ExternalAuthService;
   recovery: RecoveryService;
+  totp: TotpService;
   invites: InviteService;
   sshKeys: SshKeyService;
   git: GitRunner;
@@ -56,6 +61,9 @@ export interface AppRouteContext {
   }>;
   archives: ArchiveService;
   enhancements: RepositoryEnhancementService;
+  issues: IssueService;
+  releases: ReleaseService;
+  wikis: WikiService;
   mutations: RepositoryMutationService;
   repositoryAdmin: RepositoryAdminService;
   groups: GroupService;

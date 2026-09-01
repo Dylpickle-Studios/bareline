@@ -1,6 +1,7 @@
 import type { AppRouteContext } from './route-context.js';
 import * as routeHelpers from './route-helpers.js';
 import * as runtime from './route-runtime.js';
+import { TotpError } from '../../auth/totp-service.js';
 
 // Passkey and account credential management routes.
 export function registerAuthCredentialRoutes(context: AppRouteContext): void {
@@ -11,6 +12,7 @@ export function registerAuthCredentialRoutes(context: AppRouteContext): void {
     tokens,
     passkeys,
     recovery,
+    totp,
     sshKeys,
     repositoryAdmin,
     search,
@@ -132,6 +134,7 @@ export function registerAuthCredentialRoutes(context: AppRouteContext): void {
     current: ReturnType<typeof requireSession>,
     createdToken?: string,
     createdRecoveryCodes?: string[],
+    createdTotpBackupCodes?: string[],
   ) =>
     await render('credentials', {
       user: current.user,
@@ -143,11 +146,78 @@ export function registerAuthCredentialRoutes(context: AppRouteContext): void {
       recoveryCodeCount: recovery.count(current.user.id),
       passkeyList: passkeys.list(current.user.id),
       pendingTransfers: repositoryAdmin.pendingTransfers(current.user.id),
+      totp: {
+        enabled: totp.isEnabled(current.user.id),
+        backupCodeCount: totp.backupCodeCount(current.user.id),
+      },
+      createdTotpBackupCodes: createdTotpBackupCodes ?? null,
     });
 
   app.get('/settings/credentials', async (request, reply) => {
     const current = requireSession(request);
     return reply.type('text/html').send(await credentialsPage(current));
+  });
+
+  app.get('/settings/two-factor/setup', async (request, reply) => {
+    const current = requireSession(request);
+    if (totp.isEnabled(current.user.id)) return await reply.redirect('/settings/credentials');
+    const enrollment = await totp.beginEnrollment(current.user.id, current.user.username);
+    return reply.type('text/html').send(
+      await render('totp-setup', {
+        user: current.user,
+        csrf: current.csrfToken,
+        secret: enrollment.secret,
+        qrCodeDataUrl: enrollment.qrCodeDataUrl,
+      }),
+    );
+  });
+
+  app.post('/settings/two-factor/setup', async (request, reply) => {
+    const current = requireSession(request);
+    const body = request.body as runtime.FormBody;
+    auth.verifyCsrf(current.csrfToken, body.csrf);
+    try {
+      const backupCodes = totp.confirmEnrollment(current.user.id, body.code ?? '');
+      auth.revokeUserSessions(current.user.id, request.cookies.session);
+      return await reply
+        .type('text/html')
+        .send(await credentialsPage(current, undefined, undefined, backupCodes));
+    } catch (error) {
+      if (!(error instanceof TotpError)) throw error;
+      const enrollment = await totp.pendingEnrollment(current.user.id, current.user.username);
+      if (!enrollment) return await reply.redirect('/settings/two-factor/setup');
+      return reply
+        .code(error.statusCode)
+        .type('text/html')
+        .send(
+          await render('totp-setup', {
+            user: current.user,
+            csrf: current.csrfToken,
+            secret: enrollment.secret,
+            qrCodeDataUrl: enrollment.qrCodeDataUrl,
+            error: 'The authentication code was not accepted.',
+          }),
+        );
+    }
+  });
+
+  app.post('/settings/two-factor/disable', async (request, reply) => {
+    const current = requireSession(request);
+    const body = request.body as runtime.FormBody;
+    auth.verifyCsrf(current.csrfToken, body.csrf);
+    totp.disable(current.user.id, current.user.id);
+    auth.revokeUserSessions(current.user.id, request.cookies.session);
+    return await reply.redirect('/settings/credentials');
+  });
+
+  app.post('/settings/two-factor/backup-codes', async (request, reply) => {
+    const current = requireSession(request);
+    const body = request.body as runtime.FormBody;
+    auth.verifyCsrf(current.csrfToken, body.csrf);
+    const backupCodes = totp.regenerateBackupCodes(current.user.id);
+    return reply
+      .type('text/html')
+      .send(await credentialsPage(current, undefined, undefined, backupCodes));
   });
 
   app.get('/settings/appearance', async (request, reply) => {

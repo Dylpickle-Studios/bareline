@@ -1,0 +1,10 @@
+<section class="narrow">
+  <h1>Two-factor authentication</h1>
+  <% if (it.error) { %><div class="notice error" role="alert"><%= it.error %></div><% } %>
+  <p>Enter the 6-digit code from your authenticator app, or one of your backup codes.</p>
+  <form method="post" class="form-stack">
+    <input type="hidden" name="csrf" value="<%= it.csrf ?? '' %>">
+    <label>Authentication code<input name="code" inputmode="numeric" autocomplete="one-time-code" autofocus required maxlength="20"></label>
+    <button class="button primary" type="submit">Verify</button>
+  </form>
+</section>

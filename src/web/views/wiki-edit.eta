@@ -1,0 +1,10 @@
+<section class="repo-shell narrow-wide">
+  <header><p class="eyebrow"><%= it.repository.ownerSlug %>/<%= it.repository.slug %></p><h1><%= it.exists ? 'Edit' : 'Create' %> wiki page: <%= it.page %></h1></header>
+  <form method="post" action="/<%= it.repository.ownerSlug %>/<%= it.repository.slug %>/wiki/<%= encodeURIComponent(it.page) %>/edit" class="form-stack">
+    <input type="hidden" name="csrf" value="<%= it.csrf %>">
+    <label>Markdown content<textarea id="wiki-editor" name="content" rows="24" spellcheck="true"><%= it.content %></textarea></label>
+    <label>Change summary<input name="message" value="<%= it.exists ? `Update ${it.page}` : `Create ${it.page}` %>" maxlength="10000"></label>
+    <div class="actions"><button class="button primary" type="submit">Save page</button><% if (it.exists) { %><a class="button" href="/<%= it.repository.ownerSlug %>/<%= it.repository.slug %>/wiki/<%= encodeURIComponent(it.page) %>">Cancel</a><% } %></div>
+  </form>
+  <% if (it.exists) { %><form method="post" action="/<%= it.repository.ownerSlug %>/<%= it.repository.slug %>/wiki/<%= encodeURIComponent(it.page) %>/delete" data-confirm="Delete this wiki page?"><input type="hidden" name="csrf" value="<%= it.csrf %>"><button class="button danger" type="submit">Delete page</button></form><% } %>
+</section>

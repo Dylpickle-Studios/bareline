@@ -18,6 +18,12 @@ export {
   idResponse,
   inviteCreatedResponse,
   inviteListResponse,
+  issueCommentListResponse,
+  issueCommentResponse,
+  issueLabelListResponse,
+  issueLabelResponse,
+  issueListResponse,
+  issueResponse,
   objectIdResponse,
   okResponse,
   paginatedAdminRepositoriesResponse,
@@ -50,6 +56,7 @@ export {
   userResponse,
 } from '../../api/openapi-schemas.js';
 export { documentation, documentationPage, documentationSearch } from '../../docs/documentation.js';
+export { llmsTxt } from '../../docs/llms-txt.js';
 export { GitError } from '../../git/errors.js';
 export { atomFeed } from '../../feeds/atom.js';
 export type { LfsBatchObject } from '../../lfs/lfs-service.js';

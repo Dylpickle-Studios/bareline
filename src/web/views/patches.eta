@@ -1,0 +1,15 @@
+<section class="repo-shell">
+  <header><p class="eyebrow"><%= it.repository.ownerSlug %>/<%= it.repository.slug %></p><h1>Patches</h1></header>
+  <p class="muted">Export a patch from a <a href="/<%= it.repository.ownerSlug %>/<%= it.repository.slug %>/commits?ref=<%= encodeURIComponent(it.branch) %>">commit</a> or the <a href="/<%= it.repository.ownerSlug %>/<%= it.repository.slug %>/compare">compare view</a> using its “Download patch” button. Import a patch below to preview and apply it as one or more commits, without a working tree.</p>
+  <% if (it.canWrite) { %>
+  <form method="post" action="/<%= it.repository.ownerSlug %>/<%= it.repository.slug %>/patches/preview" enctype="multipart/form-data" class="form-stack">
+    <input type="hidden" name="csrf" value="<%= it.csrf %>">
+    <label>Target branch<input name="branch" value="<%= it.branch %>" required maxlength="255"></label>
+    <label>Patch file<input name="file" type="file" accept=".patch,.diff,text/plain"></label>
+    <label>Or paste patch text<textarea name="patch" rows="16" spellcheck="false" placeholder="Paste the output of git diff or git format-patch"></textarea></label>
+    <button class="button primary" type="submit">Preview import</button>
+  </form>
+  <% } else { %>
+  <p class="notice">Sign in with write access to this repository to import a patch.</p>
+  <% } %>
+</section>

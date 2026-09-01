@@ -13,14 +13,28 @@ signed commits for web-write eligibility, and require a bounded literal commit-m
 Administrators can register verified OpenPGP or SSH fingerprints under Application settings;
 Bareline continues to distinguish cryptographic validity from locally assigned identity trust.
 
-Repository activity is append-oriented and deliberately limited to Git/repository events. Signed
-push policies that need full commit-chain validation should be enforced by the upstream receive
-environment; Bareline never installs repository-controlled hooks and refuses transport writes when
-such a policy is active.
+Repository activity is append-oriented and covers Git/repository events plus issue-tracker events
+(create, comment, close/reopen, assign, label). Signed push policies that need full commit-chain
+validation should be enforced by the upstream receive environment; Bareline never installs
+repository-controlled hooks and refuses transport writes when such a policy is active.
 
 Run `bareline repo mirrors-run --config config.yml` from a systemd timer or cron job to process up
 to 50 due mirrors per invocation. Failures are recorded without preventing other due mirrors from
 running; administrators can also use **Run now** in repository settings.
+
+## Issue tracker
+
+Each repository has an integrated issue tracker: title, Markdown description, open/closed status,
+threaded comments, many-to-many labels, and a single assignee, numbered sequentially per repository
+(`#1`, `#2`, ...). Viewing follows the repository's own read visibility. Opening an issue or
+commenting requires only read access plus a signed-in account (so external reporters on a public
+repository can participate); closing, reopening, and editing an issue or a comment additionally
+allow its own author even without write access; assigning and labeling require write access.
+Insufficient access is reported as a non-disclosing 404, the same convention every other
+repository-scoped resource uses. Issue changes appear in the repository activity feed, fire the
+same repository-scoped webhooks as Git events (`issue.created`, `issue.commented`, `issue.closed`,
+`issue.reopened`, `issue.assigned`, `issue.labeled`), and are indexed by the same background search
+worker used for Git content.
 
 ## Users, groups, and permissions
 
@@ -41,6 +55,12 @@ OIDC providers should use discovery, PKCE, state, nonce, exact redirect URIs, an
 secrets. LDAP deployments should use LDAPS or StartTLS, escape filters, bind with the presented user
 only after a bounded lookup, and never log bind passwords. Proxy authentication is safe only when
 direct clients cannot set the identity header and requests arrive from configured proxy addresses.
+
+Users may self-enroll in TOTP two-factor authentication from account settings; it is additive to
+password, LDAP, and plugin logins (passkey, OIDC, and reverse-proxy logins already satisfy strong or
+federated authentication and are exempt). Enrollment requires `security.masterKey` to be configured,
+the same key already required for encrypted webhook and OIDC secrets, and fails with a clear error
+otherwise. Lost-device recovery uses single-use backup codes shown once at enrollment.
 
 ## Search and storage
 

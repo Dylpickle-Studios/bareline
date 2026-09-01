@@ -50,8 +50,19 @@ describe('webhook service', () => {
     expect(database.prepare('SELECT count(*) AS count FROM webhook_deliveries').get()).toEqual({
       count: 1,
     });
+
+    const issueHook = webhooks.create(repository.id, user.id, 'https://example.com/issues', [
+      'issue.created',
+    ]);
+    webhooks.publish('issue.created', { repositoryId: repository.id, number: 1 });
+    expect(
+      database
+        .prepare('SELECT count(*) AS count FROM webhook_deliveries WHERE webhook_id = ?')
+        .get(issueHook.id),
+    ).toEqual({ count: 1 });
+
     webhooks.remove(repository.id, user.id, created.id);
-    expect(webhooks.list(repository.id)).toEqual([]);
+    expect(webhooks.list(repository.id)).toMatchObject([{ id: issueHook.id }]);
     database.close();
   });
 });

@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import { open, realpath, stat } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { open, realpath } from 'node:fs/promises';
 import { ConcurrencyLimiter, terminateChildProcess } from '../security/process-limits.js';
 import { GitError } from './errors.js';
 
@@ -82,6 +83,8 @@ export interface GitRunOptions {
   indexFile?: string;
   truncateOutput?: boolean;
   maxInputBytes?: number;
+  /** Additional environment variables layered onto the controlled Git environment. */
+  env?: Readonly<Record<string, string>>;
 }
 
 export interface GitRunnerLimits {
@@ -178,9 +181,10 @@ export class GitRunner {
         detached: process.platform !== 'win32',
         windowsHide: true,
         stdio: ['pipe', 'pipe', 'pipe'],
-        env: controlledGitEnvironment(
-          options.indexFile ? { GIT_INDEX_FILE: options.indexFile } : {},
-        ),
+        env: controlledGitEnvironment({
+          ...(options.indexFile ? { GIT_INDEX_FILE: options.indexFile } : {}),
+          ...options.env,
+        }),
       });
 
       const stdout: Buffer[] = [];
@@ -267,17 +271,25 @@ export class GitRunner {
   }
 
   async assertRepository(path: string, allowedRoot: string): Promise<string> {
-    const [canonicalPath, canonicalRoot] = await Promise.all([
-      realpath(path),
-      realpath(allowedRoot),
-    ]);
-    if (canonicalPath !== canonicalRoot && !canonicalPath.startsWith(`${canonicalRoot}/`)) {
-      throw new GitError('Repository path is outside its storage root', 'not_found');
+    const canonicalRoot = await realpath(allowedRoot);
+    let handle;
+    try {
+      handle = await open(path, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+    } catch {
+      throw new GitError('Repository does not exist', 'not_found');
     }
-    const info = await stat(canonicalPath);
-    if (!info.isDirectory()) throw new GitError('Repository does not exist', 'not_found');
-    const handle = await open(canonicalPath, 'r');
-    await handle.close();
-    return canonicalPath;
+    try {
+      // Resolve the canonical path from the already-open file descriptor rather than
+      // re-reading `path` from disk a second time, so the directory checked against
+      // `allowedRoot` is guaranteed to be the exact one just opened: a symlink swapped
+      // in between separate path-based syscalls can't smuggle a different target through.
+      const canonicalPath = await realpath(`/proc/self/fd/${String(handle.fd)}`);
+      if (canonicalPath !== canonicalRoot && !canonicalPath.startsWith(`${canonicalRoot}/`)) {
+        throw new GitError('Repository path is outside its storage root', 'not_found');
+      }
+      return canonicalPath;
+    } finally {
+      await handle.close();
+    }
   }
 }

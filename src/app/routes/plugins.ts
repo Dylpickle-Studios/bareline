@@ -7,6 +7,7 @@ export function registerPluginsRoutes(context: AppRouteContext): void {
     app,
     config,
     repositories,
+    enhancements,
     browser,
     referenceOptions,
     pluginManager,
@@ -174,6 +175,16 @@ export function registerPluginsRoutes(context: AppRouteContext): void {
     const sshCloneUrl = config.ssh.enabled
       ? `git@${config.ssh.host}:${repository.ownerSlug}/${repository.slug}.git`
       : null;
+    let forkParent: { ownerSlug: string; slug: string } | null = null;
+    if (repository.forkedFromId) {
+      try {
+        const parent = repositories.getById(repository.forkedFromId);
+        if (repositories.permission(parent, current?.user.id ?? null) !== 'none')
+          forkParent = { ownerSlug: parent.ownerSlug, slug: parent.slug };
+      } catch (error) {
+        if (!(error instanceof runtime.NotFoundError)) throw error;
+      }
+    }
     return reply.type('text/html').send(
       await render('repository', {
         user: current?.user ?? null,
@@ -196,6 +207,10 @@ export function registerPluginsRoutes(context: AppRouteContext): void {
         canAdmin:
           current !== null &&
           ['admin', 'owner'].includes(repositories.permission(repository, current.user.id)),
+        starCount: enhancements.starCount(repository.id),
+        starred: current !== null && enhancements.isStarred(current.user.id, repository.id),
+        forkCount: repositories.countForks(repository.id),
+        forkParent,
       }),
     );
   });

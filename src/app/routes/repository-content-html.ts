@@ -391,13 +391,32 @@ export function registerRepositoryContentHtmlRoutes(context: AppRouteContext): v
         },
       });
     }
+    const canWrite =
+      current !== null &&
+      !['none', 'read'].includes(repositories.permission(repository, current.user.id));
     return reply.type('text/html').send(
       await render('commit', {
         user: current?.user ?? null,
         repository,
         commit: { ...commit, diffFiles },
+        csrf: current?.csrfToken ?? '',
+        canWrite,
+        branches: canWrite ? await browser.branches(repository) : [],
       }),
     );
+  });
+
+  app.get('/:owner/:repository/commit/:objectId/patch', async (request, reply) => {
+    const { repository } = readableRepository(request);
+    const parameters = request.params as { objectId: string };
+    const content = await browser.commitPatch(repository, parameters.objectId);
+    const filename = `${parameters.objectId.slice(0, 12)}.patch`;
+    reply.header(
+      'Content-Disposition',
+      `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
+    );
+    reply.header('Cache-Control', 'private, no-store');
+    return reply.type('text/plain; charset=utf-8').send(content);
   });
 
   app.get(
@@ -567,6 +586,120 @@ export function registerRepositoryContentHtmlRoutes(context: AppRouteContext): v
         comparison,
         baseInput,
         headInput,
+        canWrite:
+          current !== null &&
+          !['none', 'read'].includes(repositories.permission(repository, current.user.id)),
+      }),
+    );
+  });
+
+  app.get('/:owner/:repository/compare/patch', async (request, reply) => {
+    const { repository } = readableRepository(request);
+    const query = request.query as { base?: string; head?: string };
+    const baseInput = query.base ?? repository.defaultBranch;
+    const headInput = query.head ?? repository.defaultBranch;
+    const content = await browser.comparePatch(repository, baseInput, headInput);
+    const filename = `${repository.slug}-${baseInput.replaceAll('/', '-')}-${headInput.replaceAll('/', '-')}.patch`;
+    reply.header(
+      'Content-Disposition',
+      `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
+    );
+    reply.header('Cache-Control', 'private, no-store');
+    return reply.type('text/plain; charset=utf-8').send(content);
+  });
+
+  app.get('/:owner/:repository/patches', async (request, reply) => {
+    const { repository, current } = readableRepository(request);
+    const query = request.query as { ref?: string };
+    const canWrite =
+      current !== null &&
+      !['none', 'read'].includes(repositories.permission(repository, current.user.id));
+    return reply.type('text/html').send(
+      await render('patches', {
+        user: current?.user ?? null,
+        repository,
+        csrf: current?.csrfToken ?? '',
+        branch: query.ref ?? repository.defaultBranch,
+        canWrite,
+        ...(await referenceOptions(repository)),
+      }),
+    );
+  });
+
+  app.post('/:owner/:repository/patches/preview', async (request, reply) => {
+    const { repository, current } = writableRepository(request);
+    const fields = new Map<string, string>();
+    let uploadedContent: Buffer | null = null;
+    let totalBytes = 0;
+    const trackBytes = (bytes: number): void => {
+      totalBytes += bytes;
+      if (totalBytes > config.limits.requestBodyBytes) throw new runtime.PayloadTooLargeError();
+    };
+    for await (const part of request.parts()) {
+      if (part.type === 'file') {
+        const content = await part.toBuffer();
+        trackBytes(content.length);
+        if (content.length > 0) uploadedContent = content;
+      } else if (typeof part.value === 'string') {
+        trackBytes(Buffer.byteLength(part.value, 'utf8'));
+        fields.set(part.fieldname, part.value);
+      }
+    }
+    auth.verifyCsrf(current.csrfToken, fields.get('csrf'));
+    const branch = fields.get('branch') ?? repository.defaultBranch;
+    const patchContent = uploadedContent ?? Buffer.from(fields.get('patch') ?? '', 'utf8');
+    if (patchContent.length < 1)
+      throw new runtime.ValidationError('Provide a patch file or paste patch text to preview');
+    const preview = await mutations.previewPatch({
+      repository,
+      actorUserId: current.user.id,
+      branch,
+      patchContent,
+    });
+    return reply.type('text/html').send(
+      await render('patch-preview', {
+        user: current.user,
+        repository,
+        csrf: current.csrfToken,
+        branch,
+        patch: patchContent.toString('utf8'),
+        preview,
+      }),
+    );
+  });
+
+  app.post('/:owner/:repository/patches/import', async (request, reply) => {
+    const { repository, current } = writableRepository(request);
+    const body = request.body as runtime.FormBody;
+    auth.verifyCsrf(current.csrfToken, body.csrf);
+    const branch = body.branch ?? repository.defaultBranch;
+    const commitId = await mutations.importPatch({
+      repository,
+      actorUserId: current.user.id,
+      branch,
+      patchContent: Buffer.from(body.patch ?? '', 'utf8'),
+      fallbackMessage: body.message ?? '',
+    });
+    return await reply.redirect(`/${repository.ownerSlug}/${repository.slug}/commit/${commitId}`);
+  });
+
+  app.get('/:owner/:repository/insights', async (request, reply) => {
+    const { repository, current } = readableRepository(request);
+    const query = request.query as { ref?: string };
+    const ref = query.ref ?? repository.defaultBranch;
+    const [languages, contributors] = await Promise.all([
+      browser.languageStats(repository, ref),
+      browser.contributors(repository, ref),
+    ]);
+    return reply.type('text/html').send(
+      await render('insights', {
+        user: current?.user ?? null,
+        repository,
+        ref,
+        languages,
+        contributors,
+        forkCount: repositories.countForks(repository.id),
+        ...(await referenceOptions(repository)),
       }),
     );
   });

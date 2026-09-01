@@ -1,0 +1,25 @@
+<section class="repo-shell">
+  <header><p class="eyebrow"><%= it.repository.ownerSlug %>/<%= it.repository.slug %></p><h1>Preview patch import</h1><p class="muted">Target branch <strong><%= it.branch %></strong> · <%= it.preview.commits.length %> patch<%= it.preview.commits.length === 1 ? '' : 'es' %></p></header>
+  <% if (!it.preview.valid) { %><div class="notice error" role="alert">This patch cannot be applied cleanly to <%= it.branch %>. Fix the failing section below and try again.</div><% } %>
+  <% it.preview.commits.forEach(function(commit, index) { %>
+    <details class="diff-file" open>
+      <summary><strong><%= commit.subject || `Patch ${index + 1}` %></strong><span><%= commit.applied ? 'Applies cleanly' : 'Does not apply' %> · +<%= commit.additions %> −<%= commit.deletions %> · <%= commit.filesChanged %> files</span></summary>
+      <% if (commit.authorName || commit.authoredAt) { %><p class="muted"><% if (commit.authorName) { %><%= commit.authorName %><% if (commit.authorEmail) { %> &lt;<%= commit.authorEmail %>&gt;<% } %><% } %><% if (commit.authoredAt) { %> · <%= commit.authoredAt %><% } %></p><% } %>
+      <% if (commit.error) { %><p class="notice error"><%= commit.error %></p><% } %>
+      <% commit.diffFiles.forEach(function(file) { %>
+        <p><strong><%= file.newPath %></strong> <span class="muted"><%= file.status %> · +<%= file.additions %> −<%= file.deletions %></span></p>
+        <% file.hunks.forEach(function(hunk) { %><pre class="diff"><code><%= hunk.lines.join('\n') %></code></pre><% }) %>
+      <% }) %>
+    </details>
+  <% }) %>
+  <% if (it.preview.valid) { %>
+  <form method="post" action="/<%= it.repository.ownerSlug %>/<%= it.repository.slug %>/patches/import" class="form-stack">
+    <input type="hidden" name="csrf" value="<%= it.csrf %>">
+    <input type="hidden" name="branch" value="<%= it.branch %>">
+    <textarea name="patch" hidden><%= it.patch %></textarea>
+    <label>Commit message override<small>Used only for sections without a Subject line.</small><input name="message" maxlength="10000"></label>
+    <button class="button primary" type="submit">Confirm import (<%= it.preview.commits.length %> commit<%= it.preview.commits.length === 1 ? '' : 's' %>)</button>
+  </form>
+  <% } %>
+  <p><a href="/<%= it.repository.ownerSlug %>/<%= it.repository.slug %>/patches">Start over</a></p>
+</section>

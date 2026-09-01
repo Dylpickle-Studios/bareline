@@ -432,6 +432,44 @@ export const repositoryTransferListResponse = object({
   items: array(repositoryTransferResponse),
 });
 
+export const issueLabelResponse = object({ id: integer, name: string, color: string });
+export const issueCommentResponse = object({
+  id: integer,
+  authorUsername: nullableString,
+  body: string,
+  createdAt: string,
+  updatedAt: nullableString,
+});
+export const issueResponse = object({
+  number: integer,
+  title: string,
+  body: string,
+  status: { type: 'string', enum: ['open', 'closed'] },
+  authorUsername: nullableString,
+  assigneeUsername: nullableString,
+  labels: array(issueLabelResponse),
+  createdAt: string,
+  updatedAt: string,
+  closedAt: nullableString,
+});
+export const issueSummaryResponse = object({
+  number: integer,
+  title: string,
+  status: { type: 'string', enum: ['open', 'closed'] },
+  authorUsername: nullableString,
+  assigneeUsername: nullableString,
+  labels: array(issueLabelResponse),
+  createdAt: string,
+  updatedAt: string,
+  closedAt: nullableString,
+});
+export const issueListResponse = object(
+  { items: array(issueSummaryResponse), pagination: paginationResponse },
+  ['items'],
+);
+export const issueCommentListResponse = object({ items: array(issueCommentResponse) });
+export const issueLabelListResponse = object({ items: array(issueLabelResponse) });
+
 const pluginSettingValue = {
   anyOf: [string, integer, boolean, { type: 'array', items: string }, { type: 'null' }],
 } as const;

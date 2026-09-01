@@ -15,6 +15,29 @@ All notable changes follow Keep a Changelog. This project uses semantic versioni
 - Repository-scoped, HMAC-signed webhooks with encrypted one-time secrets, SSRF-aware HTTPS
   allowlists, durable bounded retries, and dead-letter state.
 - Opt-in OTLP/HTTP trace export with generated trace context and bounded in-memory buffering.
+- Self-service TOTP two-factor authentication for password, LDAP, and plugin logins, with QR-code
+  enrollment, encrypted secrets at rest, replay-resistant verification, and single-use backup codes.
+- Per-repository issue tracker: titles, Markdown descriptions, open/closed status, comments, labels,
+  and assignment, with sequential per-repository numbering, webhook events, and search indexing.
+- Git patch files: view, import (paste or upload, with a dry-run preview before committing), and
+  export a single commit or a compare range as a `git format-patch` series, applied without ever
+  materializing a working tree.
+- Git-native alternatives to a pull-request workflow: repository forking, cherry-pick, revert, and
+  branch merging (fast-forward or a real three-way merge via `git merge-tree`), all server-rendered
+  and bare-repo only.
+- Per-repository wikis: Markdown pages backed by their own small Git repository, with page history.
+- Releases: tag-backed release notes with Markdown bodies and uploadable binary assets.
+- Repository insights: per-language byte breakdown and per-author commit counts computed from Git
+  data, plus repository stars.
+- `/llms.txt`, a plain-text feature and endpoint summary for LLM-based tooling, following the
+  llms.txt convention.
+
+### Fixed
+
+- Repository-template population (`populateFromTemplate`) failed against current Git versions
+  because the blanket `protocol.file.allow=never` hardening also blocked the local-path fetch it
+  depends on; the fetch now carries a scoped override since both paths are server-controlled
+  storage, not attacker input.
 
 ## [1.1.0] - 2026-08-27
 
