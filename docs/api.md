@@ -47,6 +47,11 @@ listing/filtering, creation, comments, labels, and assignment, with the same aut
 permission rules as the HTML UI (see [Administration](administration.md#issue-tracker)). Full
 request/response shapes are generated from the OpenAPI document at `/api/docs`.
 
+Wikis, releases and assets, patches, forks, branch merges, stars, and insights are currently
+server-rendered repository workflows, not REST API families. Use their HTML UI rather than assuming
+undocumented API endpoints; the OpenAPI document is the authoritative list of supported automation
+surfaces.
+
 ## Users, groups, and administration
 
 User responses omit credentials and hidden email. Group responses are limited to members and expose

@@ -79,5 +79,7 @@ versions, results, artifact digests, and any environment-only exceptions in the 
 
 ## Explicit core exclusions
 
-Bareline intentionally does not add issues, pull/merge requests, CI/CD runners, registries,
-deployments, Pages, environments, project management, or DevOps dashboards.
+Bareline intentionally does not add pull requests, CI/CD runners, registries, deployments, Pages,
+environments, project management, or DevOps dashboards. It provides repository-centred issues,
+wikis, releases, patches, forks, and branch operations; these remain focused Git-hosting workflows,
+not a general project-management system.

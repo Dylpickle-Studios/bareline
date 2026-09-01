@@ -6,6 +6,7 @@ const documentationBlurbs: Readonly<Record<string, string>> = {
   deployment: 'TLS termination modes and reverse-proxy deployment.',
   upgrade: 'Upgrading between versions and disaster recovery.',
   'git-guide': 'Everyday Git workflows against this server.',
+  'repository-workflows': 'Issues, patches, forks, wikis, releases, and repository insights.',
   administration: 'Server administration: users, repositories, runtime settings.',
   operations: 'Operating the service: backups, restores, health checks.',
   api: 'The versioned REST API, authenticated with bearer tokens.',

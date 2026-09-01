@@ -1,7 +1,8 @@
 # Getting Started
 
 Bareline is a focused Git server and browser. It provides repositories, history, diffs, search,
-SSH and HTTPS transport without issues, pull requests, CI, registries, or project-management UI.
+SSH and HTTPS transport, plus repository-centred issues, wikis, releases, patches, and Git-native
+collaboration. It does not provide a pull-request system, CI, registries, or project-management UI.
 
 ## Installation
 
@@ -56,7 +57,15 @@ consistently and must not follow untrusted symlinks.
 Repository administrators can protect branches, add read-only deploy keys, configure allowlisted
 mirrors, and mark repositories as templates under **Repository settings**. Your home page keeps a
 small permission-filtered list of pinned and recently viewed repositories. The Activity view shows
-Git and repository changes without introducing project-management machinery.
+Git and repository changes.
+
+## Repository workflows
+
+Repositories include issue tracking, Markdown wikis, tag-backed releases with downloadable assets,
+and language/contributor insights. Signed-in users can fork a readable repository; users with write
+access can import a reviewed patch, cherry-pick or revert a commit, and merge branches. These are
+Git-native workflows, not pull requests. See [Repository workflows](repository-workflows.md) for
+permissions, safety boundaries, and the relevant UI paths.
 
 ## Standalone distribution
 

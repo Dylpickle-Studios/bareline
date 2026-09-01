@@ -38,6 +38,8 @@ All notable changes follow Keep a Changelog. This project uses semantic versioni
   because the blanket `protocol.file.allow=never` hardening also blocked the local-path fetch it
   depends on; the fetch now carries a scoped override since both paths are server-controlled
   storage, not attacker input.
+- Corrected the product scope and user documentation to cover the integrated issue tracker and
+  repository workflows, and to distinguish those UI workflows from the supported REST API.
 
 ## [1.1.0] - 2026-08-27
 

@@ -8,6 +8,11 @@ export const documentation = [
   { slug: 'deployment', title: 'Deployment and TLS', file: 'deployment.md' },
   { slug: 'upgrade', title: 'Upgrade and recovery', file: 'upgrade.md' },
   { slug: 'git-guide', title: 'Git guide', file: 'git-guide.md' },
+  {
+    slug: 'repository-workflows',
+    title: 'Repository workflows',
+    file: 'repository-workflows.md',
+  },
   { slug: 'administration', title: 'Administration', file: 'administration.md' },
   { slug: 'operations', title: 'Operations and backups', file: 'operations.md' },
   { slug: 'api', title: 'REST API', file: 'api.md' },

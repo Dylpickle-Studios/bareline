@@ -1,6 +1,6 @@
 # Bareline
 
-> A focused Git server and Git web interface, without project-management or CI clutter.
+> A focused Git server and Git web interface, without pull-request or CI clutter.
 
 Bareline is a lightweight, server-rendered home for repositories, files, commits, diffs, branches,
 tags, blame, search, cloning, and pushing.
@@ -8,10 +8,12 @@ tags, blame, search, cloning, and pushing.
 Git-focused collaboration includes protected branches, repository-scoped read-only deploy keys,
 scheduled pull/push mirrors, trusted signature identities, repository templates, activity feeds,
 pinned/recent repositories, conflict-safe browser editing, and encrypted off-site backup uploads.
+It also includes repository issues, wikis, tag-backed releases, patches, forks, branch operations,
+and lightweight repository insights. See [the repository workflows guide](docs/repository-workflows.md).
 
-This project intentionally does **not** provide issues, pull requests, CI/CD, project boards,
-registries, deployments, or DevOps dashboards. Plugins may add independent capabilities, but those
-features will not become core abstractions.
+Bareline intentionally does **not** provide pull requests, CI/CD, project boards, registries,
+deployments, or DevOps dashboards. Its collaboration tools stay Git- and repository-centred rather
+than becoming a general project-management system. Plugins may add independent capabilities.
 
 ## Current development status
 
