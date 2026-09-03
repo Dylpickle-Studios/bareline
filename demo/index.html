@@ -10,15 +10,33 @@
     <link rel="icon" type="image/svg+xml" href="logo.svg" />
     <title>Bareline demo — Git, without the clutter</title>
     <style>
+      /* Palette mirrors src/web/assets/app.css so the preview matches the real interface. */
       :root {
-        --ink: #18211f;
-        --muted: #64706b;
-        --line: #dbe2dd;
-        --paper: #f7f7f3;
+        color-scheme: light dark;
+        --ink: #202124;
+        --muted: #6b6d72;
+        --line: #d9d9d5;
+        --paper: #f7f7f5;
         --surface: #fff;
-        --accent: #236b5b;
-        --accent-pale: #e6f1ed;
-        --code: #10201c;
+        --subtle: #f0f0ed;
+        --accent: #5b55da;
+        --accent-strong: #4741bd;
+        --accent-pale: #ecebfb;
+        --shadow: #1c1b3a1f;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --ink: #e8e8e5;
+          --muted: #9b9da3;
+          --line: #34363b;
+          --paper: #111214;
+          --surface: #181a1d;
+          --subtle: #202226;
+          --accent: #9d98ff;
+          --accent-strong: #b7b3ff;
+          --accent-pale: #23233a;
+          --shadow: #00000066;
+        }
       }
       * {
         box-sizing: border-box;
@@ -119,7 +137,7 @@
       }
       .button {
         border: 1px solid var(--accent);
-        border-radius: 6px;
+        border-radius: 5px;
         padding: 9px 13px;
         background: var(--accent);
         color: white;
@@ -133,9 +151,9 @@
       }
       .preview {
         border: 1px solid var(--line);
-        box-shadow: 0 18px 50px #19302816;
+        box-shadow: 0 18px 50px var(--shadow);
         background: var(--surface);
-        border-radius: 8px;
+        border-radius: 5px;
         overflow: hidden;
       }
       .preview-top {
@@ -172,7 +190,7 @@
         justify-content: space-between;
         gap: 12px;
         padding: 11px 16px;
-        background: #fbfcfb;
+        background: var(--subtle);
         border-bottom: 1px solid var(--line);
         font-size: 13px;
       }
@@ -189,7 +207,7 @@
         grid-template-columns: 25px 1fr auto;
         gap: 8px;
         padding: 10px 16px;
-        border-bottom: 1px solid #edf0ee;
+        border-bottom: 1px solid var(--line);
         font:
           13px ui-monospace,
           monospace;
@@ -200,14 +218,14 @@
       .readme {
         margin: 16px;
         border: 1px solid var(--line);
-        border-radius: 6px;
+        border-radius: 5px;
         overflow: hidden;
       }
       .readme header {
         padding: 9px 12px;
         font-size: 13px;
         font-weight: 700;
-        background: #fbfcfb;
+        background: var(--subtle);
         border-bottom: 1px solid var(--line);
       }
       .readme article {
@@ -252,12 +270,20 @@
         color: var(--muted);
         font-size: 14px;
       }
+      .feature code {
+        padding: 1px 4px;
+        border-radius: 4px;
+        background: var(--subtle);
+        color: var(--ink);
+        font:
+          12px ui-monospace,
+          monospace;
+      }
       .notice {
         margin: 0 0 40px;
         padding: 14px 16px;
         border-left: 3px solid var(--accent);
         background: var(--accent-pale);
-        color: #25443a;
       }
       footer {
         display: flex;
@@ -272,12 +298,13 @@
         width: min(580px, calc(100% - 32px));
         padding: 0;
         border: 1px solid var(--line);
-        border-radius: 8px;
+        border-radius: 5px;
         color: var(--ink);
-        box-shadow: 0 20px 70px #0004;
+        box-shadow: 0 20px 70px var(--shadow);
+        background: var(--surface);
       }
       dialog::backdrop {
-        background: #10201c88;
+        background: #0009;
       }
       .dialog-inner {
         padding: 18px;
@@ -358,7 +385,8 @@
           <h1>Git, without the clutter.</h1>
           <p>
             Bareline is a lightweight, self-hosted home for repositories, history, diffs, branches,
-            tags, search, and the everyday work of Git.
+            tags, and search — with patches, forks, merges, wikis, and releases in place of a
+            pull-request system.
           </p>
           <div class="actions">
             <a class="button" href="https://github.com/Dylpickle-Studios/bareline">View on GitHub</a
@@ -368,11 +396,11 @@
         <div class="preview" id="preview">
           <div class="preview-top">
             <span><strong>alice / paper-trail</strong> · Public</span
-            ><span aria-hidden="true">Clone ⌄</span>
+            ><span aria-hidden="true">★ 12 · ⑂ 3 · Clone ⌄</span>
           </div>
           <nav>
-            <span>Code</span><span>Commits</span><span>Branches</span><span>Tags</span
-            ><span>Compare</span><span>Activity</span>
+            <span>Code</span><span>Commits</span><span>Compare</span><span>Patches</span
+            ><span>Releases</span><span>Wiki</span><span class="muted" aria-hidden="true">⋯</span>
           </nav>
           <div class="commit">
             <span>● <strong>Refine the reading experience</strong></span
@@ -394,8 +422,10 @@
         </div>
       </section>
       <p class="notice">
-        <strong>Interactive local demo.</strong> Try browsing and changing a seeded repository in
-        your browser. Cloning, pushing, accounts, and server search require the self-hosted server.
+        <strong>Interactive local demo.</strong> Browse and change a seeded repository in your
+        browser — import a patch with a real dry-run preview, fork, merge, cherry-pick, revert, edit
+        the wiki, publish a release, and file an issue. Cloning, pushing, accounts, and server
+        search require the self-hosted server.
       </p>
       <section class="features" id="features">
         <span class="eyebrow">The essentials, carefully made</span>
@@ -416,28 +446,52 @@
             </p>
           </article>
           <article class="feature">
+            <h3>Patches, not pull requests</h3>
+            <p>
+              Import a pasted or uploaded patch after a dry-run preview, and export any commit or
+              comparison as <code>git format-patch</code> output.
+            </p>
+          </article>
+          <article class="feature">
+            <h3>Fork, cherry-pick, merge</h3>
+            <p>
+              Fork any repository you can read, then cherry-pick, revert, or merge from the browser
+              — fast-forward where possible, a real three-way merge otherwise.
+            </p>
+          </article>
+          <article class="feature">
+            <h3>Wikis and releases</h3>
+            <p>
+              Markdown wikis kept in their own Git repository, and tag-backed releases with
+              downloadable assets.
+            </p>
+          </article>
+          <article class="feature">
+            <h3>Issues, kept small</h3>
+            <p>
+              Numbered issues with Markdown, comments, labels, and one assignee. No boards, no
+              sprints, no workflow engine.
+            </p>
+          </article>
+          <article class="feature">
+            <h3>Insights from Git alone</h3>
+            <p>
+              Per-language byte breakdowns, per-author commit counts, stars, and forks — computed
+              from the repository, not a tracker.
+            </p>
+          </article>
+          <article class="feature">
             <h3>Simple self-hosting</h3>
-            <p>SQLite, system Git, Smart HTTP, OpenSSH integration, and a single Docker image.</p>
-          </article>
-          <article class="feature">
-            <h3>Small-team permissions</h3>
             <p>
-              Protected branches, deploy keys, mirrors, templates, groups, trusted signatures, and
-              audit logs.
+              SQLite, system Git, Smart HTTP, OpenSSH, protected branches, deploy keys, mirrors,
+              audit logs, and a single Docker image.
             </p>
           </article>
           <article class="feature">
-            <h3>Search that respects privacy</h3>
+            <h3>Extensible and legible</h3>
             <p>
-              Local SQLite indexing across repositories, files, commits, branches, tags, people, and
-              docs.
-            </p>
-          </article>
-          <article class="feature">
-            <h3>Extensible by design</h3>
-            <p>
-              A permission-controlled plugin API, sandboxed runtime, SDK, example plugin, and
-              playground.
+              A sandboxed plugin API and SDK, a versioned REST API with OpenAPI, and an
+              <code>/llms.txt</code> summary for AI tooling.
             </p>
           </article>
         </div>
@@ -458,8 +512,9 @@
         />
         <ul class="results">
           <li>Open repository <small>alice / paper-trail</small></li>
-          <li>Open commits <small>Repository history</small></li>
-          <li>Toggle theme <small>Appearance</small></li>
+          <li>Import a patch <small>Patches</small></li>
+          <li>Conventions <small>Wiki page</small></li>
+          <li>#2 Decide how entries are archived <small>Issue · open</small></li>
         </ul>
       </div>
     </dialog>

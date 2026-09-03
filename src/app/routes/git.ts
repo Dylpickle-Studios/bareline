@@ -73,7 +73,7 @@ export function registerGitRoutes(context: AppRouteContext): void {
     const repository = repositories.find(parameters.owner, parameters.repository);
     if (!repository) throw new runtime.NotFoundError();
     const browserSession = session(request);
-    const tokenPrincipal = gitPrincipal(request, 'repository:read');
+    const tokenPrincipal = gitPrincipal(request, 'repository:read', repository.id);
     const userId = browserSession?.user.id ?? tokenPrincipal?.userId ?? null;
     repositories.require(repository, userId, 'read');
     const commits = await browser.commits(repository, repository.defaultBranch, 1, 30);
@@ -92,7 +92,11 @@ export function registerGitRoutes(context: AppRouteContext): void {
     const repository = repositories.find(parameters.owner, parameters.repository);
     if (!repository) return gitAuthenticationRequired(reply);
     const write = query.service === 'git-receive-pack';
-    const principal = gitPrincipal(request, write ? 'repository:write' : 'repository:read');
+    const principal = gitPrincipal(
+      request,
+      write ? 'repository:write' : 'repository:read',
+      repository.id,
+    );
     const permission = repositories.permission(repository, principal?.userId ?? null);
     const levels = { none: 0, read: 1, write: 2, admin: 3, owner: 4 };
     if (levels[permission] < (write ? 2 : 1)) return gitAuthenticationRequired(reply);
@@ -121,7 +125,11 @@ export function registerGitRoutes(context: AppRouteContext): void {
     const repository = repositories.find(parameters.owner, parameters.repository);
     if (!repository) return gitAuthenticationRequired(reply);
     const write = parameters.service === 'git-receive-pack';
-    const principal = gitPrincipal(request, write ? 'repository:write' : 'repository:read');
+    const principal = gitPrincipal(
+      request,
+      write ? 'repository:write' : 'repository:read',
+      repository.id,
+    );
     const permission = repositories.permission(repository, principal?.userId ?? null);
     const levels = { none: 0, read: 1, write: 2, admin: 3, owner: 4 };
     if (levels[permission] < (write ? 2 : 1)) return gitAuthenticationRequired(reply);

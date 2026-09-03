@@ -11,6 +11,7 @@ export function registerApiAccountRoutes(context: AppRouteContext): void {
     tokens,
     passkeys,
     sshKeys,
+    repositories,
     repositoryAdmin,
     groups,
     search,
@@ -225,16 +226,31 @@ export function registerApiAccountRoutes(context: AppRouteContext): void {
     async (request, reply) => {
       const principal = apiPrincipal(request, 'api:write');
       if (!principal) throw new runtime.AuthorizationError();
-      const body = request.body as { name: string; scopes: string[]; expiresAt?: string };
+      const body = request.body as {
+        name: string;
+        scopes: string[];
+        expiresAt?: string;
+        repository?: string;
+      };
       const expiresAt = body.expiresAt ? new Date(body.expiresAt) : undefined;
       if (expiresAt && !Number.isFinite(expiresAt.getTime()))
         throw new runtime.ValidationError('Token expiration is invalid');
+      let repositoryId: number | undefined;
+      if (body.repository) {
+        const [owner, slug] = body.repository.split('/', 2);
+        const repository = repositories.find(owner ?? '', slug ?? '');
+        if (!repository) throw new runtime.NotFoundError();
+        // Read access is the floor for binding; the token still cannot exceed it in use.
+        repositories.require(repository, principal.userId, 'read');
+        repositoryId = repository.id;
+      }
       return reply.code(201).send({
         token: tokens.create({
           userId: principal.userId,
           name: body.name,
           scopes: body.scopes,
           ...(expiresAt ? { expiresAt } : {}),
+          ...(repositoryId === undefined ? {} : { repositoryId }),
         }),
       });
     },

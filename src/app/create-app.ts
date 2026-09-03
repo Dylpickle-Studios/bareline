@@ -413,7 +413,16 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
     return { repository, current };
   };
 
-  const gitPrincipal = (request: FastifyRequest, scope: 'repository:read' | 'repository:write') => {
+  /**
+   * Git transport credential. A repository-scoped token is treated as no credential at all on any
+   * other repository, so the request falls back to whatever anonymous access that repository
+   * already allows instead of borrowing the owner's rights.
+   */
+  const gitPrincipal = (
+    request: FastifyRequest,
+    scope: 'repository:read' | 'repository:write',
+    repositoryId: number,
+  ) => {
     const authorization = request.headers.authorization;
     if (!authorization?.startsWith('Basic ')) return null;
     let decoded: string;
@@ -424,14 +433,25 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
     }
     const separator = decoded.indexOf(':');
     if (separator < 0) return null;
-    return tokens.verify(decoded.slice(separator + 1), scope);
+    const principal = tokens.verify(decoded.slice(separator + 1), scope);
+    if (principal && principal.repositoryId !== null && principal.repositoryId !== repositoryId)
+      return null;
+    return principal;
   };
 
-  const apiPrincipal = (request: FastifyRequest, scope: string) => {
+  /**
+   * REST credential. Callers that operate on one repository pass its id; everything else (account,
+   * administration, and collection endpoints) passes nothing, which rejects repository-scoped
+   * tokens outright rather than letting them reach unrelated data.
+   */
+  const apiPrincipal = (request: FastifyRequest, scope: string, repositoryId?: number) => {
     const authorization = request.headers.authorization;
-    return authorization?.startsWith('Bearer ')
+    const principal = authorization?.startsWith('Bearer ')
       ? tokens.verify(authorization.slice(7), scope)
       : null;
+    if (principal && principal.repositoryId !== null && principal.repositoryId !== repositoryId)
+      throw new AuthorizationError();
+    return principal;
   };
 
   const requireAdminPrincipal = (request: FastifyRequest) => {
@@ -452,7 +472,7 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
     const parameters = request.params as { owner: string; repository: string };
     const repository = repositories.find(parameters.owner, parameters.repository);
     if (!repository) throw new NotFoundError();
-    const principal = apiPrincipal(request, scope);
+    const principal = apiPrincipal(request, scope, repository.id);
     repositories.require(repository, principal?.userId ?? null, minimum);
     return { repository, principal };
   };
@@ -472,6 +492,7 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
     const principal = gitPrincipal(
       request,
       minimum === 'write' ? 'repository:write' : 'repository:read',
+      repository.id,
     );
     const userId = principal?.userId ?? null;
     repositories.require(repository, userId, minimum);

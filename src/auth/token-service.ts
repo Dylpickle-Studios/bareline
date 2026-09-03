@@ -6,6 +6,12 @@ import { hashSecret } from './auth-service.js';
 export interface VerifiedToken {
   userId: number;
   scopes: readonly string[];
+  /**
+   * Repository this token is confined to, or null when it carries the full access of its user.
+   * A confined token is rejected everywhere except that one repository, so it can be handed to
+   * automation without exposing the rest of the account.
+   */
+  repositoryId: number | null;
 }
 
 export class TokenService {
@@ -19,6 +25,8 @@ export class TokenService {
     name: string;
     scopes: readonly string[];
     expiresAt?: Date;
+    /** Confines the token to one repository. Callers must check the user may read it first. */
+    repositoryId?: number;
   }): string {
     const name = input.name.trim();
     if (name.length < 1 || name.length > 100) throw new TokenInputError('Token name is required');
@@ -33,6 +41,10 @@ export class TokenService {
     if (input.scopes.length < 1 || input.scopes.some((scope) => !allowedScopes.has(scope))) {
       throw new TokenInputError('Token scope is invalid');
     }
+    // Administration is never repository-shaped, so the combination would be a misleading grant.
+    if (input.repositoryId !== undefined && input.scopes.includes('api:admin')) {
+      throw new TokenInputError('A repository token cannot carry the administration scope');
+    }
     if (input.expiresAt && input.expiresAt <= new Date()) {
       throw new TokenInputError('Token expiration must be in the future');
     }
@@ -42,8 +54,8 @@ export class TokenService {
     this.database
       .prepare(
         `
-        INSERT INTO tokens(user_id, kind, name, prefix, token_hash, scopes, expires_at, created_at)
-        VALUES (?, 'api', ?, ?, ?, ?, ?, ?)
+        INSERT INTO tokens(user_id, kind, name, prefix, token_hash, scopes, expires_at, created_at, repository_id)
+        VALUES (?, 'api', ?, ?, ?, ?, ?, ?, ?)
       `,
       )
       .run(
@@ -54,13 +66,17 @@ export class TokenService {
         JSON.stringify([...new Set(input.scopes)].sort()),
         input.expiresAt?.toISOString() ?? null,
         new Date().toISOString(),
+        input.repositoryId ?? null,
       );
     this.audit?.record({
       actorUserId: input.userId,
       action: 'token.created',
       targetType: 'user',
       targetId: String(input.userId),
-      metadata: { scopes: [...new Set(input.scopes)].sort().join(',') },
+      metadata: {
+        scopes: [...new Set(input.scopes)].sort().join(','),
+        ...(input.repositoryId === undefined ? {} : { repositoryId: input.repositoryId }),
+      },
     });
     return token;
   }
@@ -73,13 +89,20 @@ export class TokenService {
     expiresAt: string | null;
     lastUsedAt: string | null;
     createdAt: string;
+    repository: string | null;
   }[] {
     const rows = this.database
       .prepare(
         `
-        SELECT id, name, prefix, scopes, expires_at, last_used_at, created_at
-        FROM tokens WHERE user_id = ? AND kind = 'api' AND revoked_at IS NULL
-        ORDER BY created_at DESC
+        SELECT t.id, t.name, t.prefix, t.scopes, t.expires_at, t.last_used_at, t.created_at,
+          CASE WHEN t.repository_id IS NULL THEN NULL
+            ELSE COALESCE(u.username, g.slug) || '/' || r.slug END AS repository
+        FROM tokens t
+        LEFT JOIN repositories r ON r.id = t.repository_id
+        LEFT JOIN users u ON r.owner_type = 'user' AND r.owner_id = u.id
+        LEFT JOIN groups g ON r.owner_type = 'group' AND r.owner_id = g.id
+        WHERE t.user_id = ? AND t.kind = 'api' AND t.revoked_at IS NULL
+        ORDER BY t.created_at DESC
       `,
       )
       .all(userId) as {
@@ -90,6 +113,7 @@ export class TokenService {
       expires_at: string | null;
       last_used_at: string | null;
       created_at: string;
+      repository: string | null;
     }[];
     return rows.map((row) => ({
       id: row.id,
@@ -99,6 +123,7 @@ export class TokenService {
       expiresAt: row.expires_at,
       lastUsedAt: row.last_used_at,
       createdAt: row.created_at,
+      repository: row.repository,
     }));
   }
 
@@ -123,14 +148,21 @@ export class TokenService {
     const row = this.database
       .prepare(
         `
-        SELECT t.id, t.user_id, t.token_hash, t.scopes FROM tokens t
+        SELECT t.id, t.user_id, t.token_hash, t.scopes, t.repository_id FROM tokens t
         JOIN users u ON u.id = t.user_id
         WHERE t.prefix = ? AND t.kind = 'api' AND t.revoked_at IS NULL
           AND (t.expires_at IS NULL OR t.expires_at > ?) AND u.status = 'active'
       `,
       )
       .get(match[1], new Date().toISOString()) as
-      { id: number; user_id: number; token_hash: Buffer; scopes: string } | undefined;
+      | {
+          id: number;
+          user_id: number;
+          token_hash: Buffer;
+          scopes: string;
+          repository_id: number | null;
+        }
+      | undefined;
     if (!row) return null;
     const expectedHash = hashSecret(token);
     if (
@@ -144,7 +176,7 @@ export class TokenService {
     this.database
       .prepare('UPDATE tokens SET last_used_at = ? WHERE id = ?')
       .run(new Date().toISOString(), row.id);
-    return { userId: row.user_id, scopes };
+    return { userId: row.user_id, scopes, repositoryId: row.repository_id };
   }
 }
 

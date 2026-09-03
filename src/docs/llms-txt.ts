@@ -80,6 +80,8 @@ export function llmsTxt(publicUrl: string): string {
   lines.push(
     `- [REST API reference](${origin}/docs/api)`,
     `- OpenAPI/Swagger UI: ${origin}/api/docs`,
+    '- Authentication: `Authorization: Bearer <token>`, created under Settings → Credentials or via `POST /api/v1/user/tokens`.',
+    '- Repository-scoped tokens: pass `repository: "owner/repository"` when creating a token to confine it to that one repository. Such a token is refused on every other repository and on all account, collection, and administration endpoints. Prefer one when a token is handed to automation or to an agent.',
     '',
   );
 

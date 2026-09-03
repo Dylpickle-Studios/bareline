@@ -7,6 +7,22 @@ The API is versioned under `/api/v1`. Send `Authorization: Bearer TOKEN`. Reposi
 Create the narrowest token that works, set an expiration, and revoke it when automation is retired.
 Raw tokens are displayed once and stored only as digests.
 
+### Repository-scoped tokens
+
+A token can be confined to a single repository, from **Settings → Credentials** or by sending
+`repository: "owner/repository"` when creating one through `POST /api/v1/user/tokens`. Binding
+requires read access to that repository at creation time and never widens access: the token still
+cannot exceed the permissions its owner holds there.
+
+A confined token is refused everywhere else. It is rejected on every other repository, on the
+repository collection endpoints, and on all account and administration endpoints, and it cannot
+carry the `api:admin` scope. Over Git transport it behaves as if no credentials were presented on
+any other repository, so a private repository answers `401` and a public one falls back to whatever
+anonymous access it already allows. Deleting a repository revokes the tokens bound to it.
+
+Prefer one of these when handing credentials to CI or to an automated agent, in the same way a
+read-only deploy key is preferred over a personal SSH key.
+
 ## Pagination and errors
 
 Collections accept bounded page/per-page inputs where applicable and return a `pagination` object.

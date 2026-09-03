@@ -352,6 +352,12 @@ export const tokenCreateBody = {
       },
     },
     expiresAt: { type: 'string', format: 'date-time' },
+    repository: {
+      type: 'string',
+      pattern: '^[a-z0-9-]{1,39}/[a-z0-9-]{1,39}$',
+      description:
+        'Confine the token to one repository, as owner/repository. The token is then refused on every other repository and on all account and administration endpoints.',
+    },
   },
 } as const;
 

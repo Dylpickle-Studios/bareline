@@ -176,7 +176,7 @@ export function registerApiRepositoryManagementRoutes(context: AppRouteContext):
       const parameters = request.params as { owner: string; repository: string };
       const repository = repositories.find(parameters.owner, parameters.repository);
       if (!repository) throw new runtime.NotFoundError();
-      const principal = apiPrincipal(request, 'repository:read');
+      const principal = apiPrincipal(request, 'repository:read', repository.id);
       repositories.require(repository, principal?.userId ?? null, 'read');
       return reply.send(routeHelpers.repositoryJson(repository));
     },
@@ -200,7 +200,7 @@ export function registerApiRepositoryManagementRoutes(context: AppRouteContext):
       const query = request.query as { ref?: string; page?: number };
       const repository = repositories.find(parameters.owner, parameters.repository);
       if (!repository) throw new runtime.NotFoundError();
-      const principal = apiPrincipal(request, 'repository:read');
+      const principal = apiPrincipal(request, 'repository:read', repository.id);
       repositories.require(repository, principal?.userId ?? null, 'read');
       const page = query.page ?? 1;
       const items = await browser.commits(repository, query.ref ?? repository.defaultBranch, page);

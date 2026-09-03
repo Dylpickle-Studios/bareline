@@ -196,6 +196,8 @@ export const tokenResponse = object({
   expiresAt: nullableString,
   lastUsedAt: nullableString,
   createdAt: string,
+  /** `owner/repository` when the token is confined to one repository, otherwise null. */
+  repository: nullableString,
 });
 export const tokenListResponse = object({ items: array(tokenResponse) });
 export const tokenCreatedResponse = object({ token: string });

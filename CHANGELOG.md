@@ -31,6 +31,10 @@ All notable changes follow Keep a Changelog. This project uses semantic versioni
   data, plus repository stars.
 - `/llms.txt`, a plain-text feature and endpoint summary for LLM-based tooling, following the
   llms.txt convention.
+- Repository-scoped personal access tokens: a token can be confined to one repository from the
+  credentials page or the REST API, is refused on every other repository and on all account,
+  collection, and administration endpoints, cannot hold the administration scope, and is revoked
+  with the repository it is bound to.
 
 ### Fixed
 

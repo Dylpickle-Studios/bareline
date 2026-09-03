@@ -87,11 +87,18 @@ export interface AppRouteContext {
     current: Session | null;
   };
   writableRepository: (request: FastifyRequest) => { repository: Repository; current: Session };
+  /** Repository-scoped tokens resolve to null on any repository other than `repositoryId`. */
   gitPrincipal: (
     request: FastifyRequest,
     scope: 'repository:read' | 'repository:write',
+    repositoryId: number,
   ) => VerifiedToken | null;
-  apiPrincipal: (request: FastifyRequest, scope: string) => VerifiedToken | null;
+  /** Omit `repositoryId` to reject repository-scoped tokens; pass it to confine them to that one. */
+  apiPrincipal: (
+    request: FastifyRequest,
+    scope: string,
+    repositoryId?: number,
+  ) => VerifiedToken | null;
   requireAdminPrincipal: (request: FastifyRequest) => VerifiedToken;
   apiRepository: (
     request: FastifyRequest,

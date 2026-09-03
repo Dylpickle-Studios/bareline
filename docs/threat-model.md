@@ -25,6 +25,10 @@ Git subprocesses, SQLite, imported roots, archive/upload parsing, and plugin run
   revocable, expiring, HttpOnly, SameSite, and Secure under HTTPS.
 - **Credential leakage:** passwords use Argon2id; bearer tokens are shown once and stored as digests;
   structured logs redact credential fields.
+- **Over-broad automation credentials:** a personal access token can be confined to a single
+  repository, in which case it is refused on every other repository and on all account, collection,
+  and administration endpoints, cannot hold the administration scope, and is revoked with that
+  repository. Confinement narrows a credential only; it never grants access its owner lacks.
 - **Second-factor bypass/replay:** self-service TOTP is additive to password, LDAP, and plugin logins
   (a hashed, single-use, short-lived pending-login token gates session issuance until the code is
   verified); the same or an earlier time-step code cannot be replayed; backup codes are single-use.

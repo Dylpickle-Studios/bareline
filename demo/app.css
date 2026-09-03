@@ -1,26 +1,74 @@
+/* Palette and theming mirror src/web/assets/app.css so the demo matches the real interface. */
 :root {
-  --ink: #18211f;
-  --muted: #64706b;
-  --line: #dbe2dd;
-  --paper: #f7f7f3;
+  color-scheme: light dark;
+  --bg: #f7f7f5;
   --surface: #fff;
-  --accent: #236b5b;
-  --pale: #e6f1ed;
-  --success: #236b5b;
-  --plus: #dff4e9;
-  --minus: #f9e2e1;
+  --surface-subtle: #f0f0ed;
+  --text: #202124;
+  --muted: #6b6d72;
+  --border: #d9d9d5;
+  --accent: #5b55da;
+  --accent-strong: #4741bd;
+  --danger: #b42318;
+  --diff-add-bg: #e8f6ee;
+  --diff-delete-bg: #fdeceb;
+  --radius: 5px;
+  --ui-font:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --code-font: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
 }
-html.dark {
-  --ink: #e8eee9;
-  --muted: #a7b4ac;
-  --line: #34423c;
-  --paper: #17201d;
-  --surface: #1d2925;
-  --accent: #70c4a3;
-  --pale: #1e3830;
-  --success: #70c4a3;
-  --plus: #184634;
-  --minus: #4b282b;
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111214;
+    --surface: #181a1d;
+    --surface-subtle: #202226;
+    --text: #e8e8e5;
+    --muted: #9b9da3;
+    --border: #34363b;
+    --accent: #9d98ff;
+    --accent-strong: #b7b3ff;
+    --danger: #ff8a80;
+    --diff-add-bg: #173328;
+    --diff-delete-bg: #3a2022;
+  }
+}
+[data-theme='light'] {
+  color-scheme: light;
+  --bg: #f7f7f5;
+  --surface: #fff;
+  --surface-subtle: #f0f0ed;
+  --text: #202124;
+  --muted: #6b6d72;
+  --border: #d9d9d5;
+  --accent: #5b55da;
+  --accent-strong: #4741bd;
+  --diff-add-bg: #e8f6ee;
+  --diff-delete-bg: #fdeceb;
+}
+[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #111214;
+  --surface: #181a1d;
+  --surface-subtle: #202226;
+  --text: #e8e8e5;
+  --muted: #9b9da3;
+  --border: #34363b;
+  --accent: #9d98ff;
+  --accent-strong: #b7b3ff;
+  --diff-add-bg: #173328;
+  --diff-delete-bg: #3a2022;
+}
+/* Names used throughout this demo, mapped onto the shared palette above. */
+:root,
+[data-theme='light'],
+[data-theme='dark'] {
+  --ink: var(--text);
+  --line: var(--border);
+  --paper: var(--bg);
+  --pale: var(--surface-subtle);
+  --success: var(--accent);
+  --plus: var(--diff-add-bg);
+  --minus: var(--diff-delete-bg);
 }
 * {
   box-sizing: border-box;
@@ -31,12 +79,22 @@ body {
   flex-direction: column;
   padding-bottom: 58px;
   margin: 0;
-  background: var(--paper);
-  color: var(--ink);
-  font:
-    15px/1.5 Inter,
-    system-ui,
-    sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.5 var(--ui-font);
+}
+a:hover {
+  color: var(--accent-strong);
+}
+:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent) 65%, transparent);
+  outline-offset: 2px;
+}
+code,
+pre,
+kbd,
+.sha {
+  font-family: var(--code-font);
 }
 button,
 input,
@@ -57,7 +115,7 @@ header {
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid var(--line);
-  background: var(--paper);
+  background: var(--surface);
 }
 header nav {
   display: flex;
@@ -178,7 +236,7 @@ footer button {
 .plugin-row button {
   padding: 8px 12px;
   border: 1px solid var(--line);
-  border-radius: 5px;
+  border-radius: var(--radius);
   background: var(--surface);
   color: var(--ink);
 }
@@ -254,7 +312,7 @@ footer button {
 .section-layout aside button {
   padding: 7px 10px;
   border: 0;
-  border-radius: 5px;
+  border-radius: var(--radius);
   background: none;
   color: var(--ink);
   text-align: left;
@@ -268,7 +326,7 @@ footer button {
 .doc-article {
   padding: 32px 36px;
   border: 1px solid var(--line);
-  border-radius: 5px;
+  border-radius: var(--radius);
   background: var(--surface);
 }
 .doc-article h2 {
@@ -276,7 +334,7 @@ footer button {
 }
 .doc-article pre {
   margin: 16px 0;
-  border-radius: 5px;
+  border-radius: var(--radius);
   background: var(--paper);
 }
 .section-content > h1 {
@@ -288,7 +346,7 @@ footer button {
   margin-top: 28px;
   padding: 18px;
   border: 1px solid var(--line);
-  border-radius: 5px;
+  border-radius: var(--radius);
   background: var(--surface);
 }
 .panel.compact {
@@ -376,9 +434,14 @@ footer button {
 .repo {
   align-items: center;
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 20px;
   margin: 25px 0;
+}
+/* Keep pin/star/fork/clone grouped at the end instead of spread across the row. */
+.repo > div:first-child {
+  margin-right: auto;
 }
 .repo span {
   color: var(--accent);
@@ -402,7 +465,7 @@ footer button {
 .primary {
   padding: 8px 12px;
   border: 1px solid var(--accent);
-  border-radius: 6px;
+  border-radius: var(--radius);
   background: var(--accent);
   color: #fff;
   font-weight: 650;
@@ -410,13 +473,12 @@ footer button {
 .repo .button {
   padding: 8px 12px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius);
   background: var(--surface);
   color: var(--ink);
   font-weight: 650;
 }
 .quiet-action {
-  margin-left: auto;
   border: 0;
   background: none;
   color: var(--ink);
@@ -459,7 +521,7 @@ footer button {
   margin-bottom: 24px;
   padding: 16px;
   border: 1px solid var(--line);
-  border-radius: 7px;
+  border-radius: var(--radius);
   background: var(--surface);
 }
 .ref-create label {
@@ -475,7 +537,7 @@ footer button {
   padding: 0;
   list-style: none;
   border: 1px solid var(--line);
-  border-radius: 7px;
+  border-radius: var(--radius);
   background: var(--surface);
 }
 .ref-list li,
@@ -505,7 +567,7 @@ footer button {
 .settings-card button {
   padding: 7px 10px;
   border: 1px solid var(--line);
-  border-radius: 5px;
+  border-radius: var(--radius);
   background: var(--surface);
   color: var(--ink);
 }
@@ -531,7 +593,7 @@ footer button {
 .settings-card {
   padding: 18px;
   border: 1px solid var(--line);
-  border-radius: 7px;
+  border-radius: var(--radius);
   background: var(--surface);
 }
 .settings-card h3 {
@@ -554,7 +616,7 @@ footer button {
 }
 .bar {
   margin-top: 16px;
-  border-radius: 7px 7px 0 0;
+  border-radius: var(--radius) var(--radius) 0 0;
   background: #f4f8f5;
 }
 .bar label {
@@ -567,7 +629,7 @@ footer button {
 .bar button {
   padding: 8px 12px;
   border: 1px solid var(--line);
-  border-radius: 5px;
+  border-radius: var(--radius);
   background: var(--surface);
   color: var(--ink);
 }
@@ -581,7 +643,7 @@ footer button {
   list-style: none;
   border: 1px solid var(--line);
   border-top: 0;
-  border-radius: 0 0 7px 7px;
+  border-radius: 0 0 var(--radius) var(--radius);
   background: var(--surface);
 }
 .row {
@@ -613,7 +675,7 @@ small {
 .card {
   margin-top: 16px;
   border: 1px solid var(--line);
-  border-radius: 7px;
+  border-radius: var(--radius);
   overflow: hidden;
   background: var(--surface);
 }
@@ -680,7 +742,7 @@ pre {
 dialog {
   width: min(580px, calc(100vw - 28px));
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: 0;
   color: var(--ink);
   background: var(--surface);
@@ -714,7 +776,7 @@ select {
   margin-top: 4px;
   padding: 8px;
   border: 1px solid var(--line);
-  border-radius: 5px;
+  border-radius: var(--radius);
   background: var(--paper);
   color: var(--ink);
 }
@@ -733,7 +795,7 @@ textarea {
 .modal-actions button {
   padding: 8px 12px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius);
   background: var(--surface);
   color: var(--ink);
 }
@@ -858,5 +920,206 @@ textarea {
   }
   footer span {
     flex-basis: 100%;
+  }
+}
+.split {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  margin-top: 24px;
+}
+.panel-block {
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.panel-block h3 {
+  margin: 0 0 10px;
+}
+.panel-block label {
+  display: block;
+  margin-bottom: 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.panel-block input,
+.panel-block select,
+.panel-block textarea {
+  display: block;
+  width: 100%;
+  margin-top: 5px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--ink);
+}
+.panel-block textarea {
+  font: 13px/1.5 var(--code-font);
+  resize: vertical;
+}
+.panel-block .ref-list {
+  margin-top: 0;
+}
+.patch-preview .status.bad,
+.status.bad {
+  color: var(--danger);
+}
+.patch-subject {
+  margin: 0;
+  padding: 12px 16px 0;
+}
+.patch-error {
+  margin: 0;
+  padding: 12px 16px 0;
+  color: var(--danger);
+}
+.patch-file {
+  padding: 12px 16px 0;
+}
+.patch-file p {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin: 0 0 6px;
+  font: 13px var(--code-font);
+}
+.patch-file .diff {
+  margin-bottom: 4px;
+}
+.patch-text {
+  max-height: 50vh;
+  overflow: auto;
+  padding: 12px;
+  border-radius: var(--radius);
+  background: var(--paper);
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+.commit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+}
+.commit-actions label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--muted);
+}
+.commit-actions select,
+.commit-actions button,
+.card header button,
+.ref-actions button,
+.modal-actions button {
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+}
+.release .markdown {
+  padding: 12px 16px;
+}
+.release .ref-list {
+  margin: 0 16px;
+}
+.release .modal-actions {
+  padding: 12px 16px;
+}
+.wiki-layout {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+  gap: 32px;
+  margin-top: 24px;
+}
+.wiki-layout aside {
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.wiki-layout nav {
+  display: grid;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+.wiki-layout nav button {
+  padding: 7px 10px;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--ink);
+  text-align: left;
+}
+.wiki-layout nav button.selected {
+  background: var(--pale);
+  color: var(--accent);
+  font-weight: 750;
+}
+.wiki-layout article {
+  padding: 4px 20px 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.wiki-actions {
+  display: flex;
+  gap: 8px;
+  padding-top: 16px;
+}
+.wiki-actions button {
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+}
+.empty {
+  padding: 28px 0;
+  color: var(--muted);
+}
+.language-bar {
+  display: flex;
+  height: 10px;
+  margin: 12px 0;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--pale);
+}
+.language-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin: 0 0 26px;
+  padding: 0;
+  list-style: none;
+}
+.language-legend li {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+}
+.language-swatch {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+}
+.label {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--pale);
+  color: var(--accent);
+  font-size: 12px;
+}
+@media (max-width: 760px) {
+  .split,
+  .wiki-layout {
+    grid-template-columns: 1fr;
   }
 }

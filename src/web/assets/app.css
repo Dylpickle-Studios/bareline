@@ -309,7 +309,12 @@ fieldset {
   min-inline-size: 0;
 }
 .repo-header {
+  flex-wrap: wrap;
   justify-content: space-between;
+}
+/* Keep pin/star/fork/clone grouped at the end instead of spread across the row. */
+.repo-header > div:first-child {
+  margin-inline-end: auto;
 }
 .repo-header h1 {
   margin: 0.15rem 0 0;

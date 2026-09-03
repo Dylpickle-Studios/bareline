@@ -639,4 +639,12 @@ export const migrations: readonly Migration[] = [
       CREATE INDEX release_assets_release ON release_assets(release_id);
     `,
   },
+  {
+    version: 21,
+    name: 'repository_scoped_tokens',
+    sql: `
+      ALTER TABLE tokens ADD COLUMN repository_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE;
+      CREATE INDEX tokens_repository ON tokens(repository_id);
+    `,
+  },
 ];

@@ -14,6 +14,7 @@ export function registerAuthCredentialRoutes(context: AppRouteContext): void {
     recovery,
     totp,
     sshKeys,
+    repositories,
     repositoryAdmin,
     search,
     pluginContributions,
@@ -140,6 +141,7 @@ export function registerAuthCredentialRoutes(context: AppRouteContext): void {
       user: current.user,
       csrf: current.csrfToken,
       tokens: tokens.list(current.user.id),
+      repositories: repositories.listAccessible(current.user.id, 1, 100),
       sshKeys: sshKeys.list(current.user.id),
       createdToken: createdToken ?? null,
       createdRecoveryCodes: createdRecoveryCodes ?? null,
@@ -327,11 +329,20 @@ export function registerAuthCredentialRoutes(context: AppRouteContext): void {
           : body.access === 'api'
             ? ['api:read']
             : ['repository:read'];
+    // Binding is only offered for repositories the account can already read, so a scoped token
+    // can never widen access; it only ever narrows it.
+    const repositoryId = body.repository ? Number.parseInt(body.repository, 10) : null;
+    if (repositoryId !== null) {
+      if (!Number.isSafeInteger(repositoryId))
+        throw new runtime.ValidationError('Invalid repository');
+      repositories.require(repositories.getById(repositoryId), current.user.id, 'read');
+    }
     const createdToken = tokens.create({
       userId: current.user.id,
       name: body.name ?? '',
-      scopes,
+      scopes: repositoryId === null ? scopes : scopes.filter((scope) => scope !== 'api:admin'),
       expiresAt: new Date(Date.now() + days * 86_400_000),
+      ...(repositoryId === null ? {} : { repositoryId }),
     });
     return reply.type('text/html').send(await credentialsPage(current, createdToken));
   });
