@@ -8,6 +8,13 @@ archive downloads while blocking web commits, Smart HTTP/SSH pushes, and mirror 
 an explicit admin action. The settings health report performs bounded, read-only checks of Git
 connectivity, refs, default-branch presence, and object inventory.
 
+Administrators can create managed repositories from public HTTPS Git URLs under **Administration →
+Repositories**. Remote import first previews the source's branch, tag, and default-branch metadata,
+then clones all refs under separate import time, reference-count, and post-clone storage limits.
+Source hostnames use the mirror allowlist and outbound SSRF checks. URL credentials, query strings,
+redirects, private network destinations, Git LFS object migration, and private-source authentication
+are deliberately unsupported.
+
 Branch policies can block force pushes and deletion through Git receive configuration, require
 signed commits for web-write eligibility, and require a bounded literal commit-message prefix.
 Administrators can register verified OpenPGP or SSH fingerprints under Application settings;

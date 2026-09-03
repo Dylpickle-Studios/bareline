@@ -35,6 +35,32 @@ git push -u origin main
 An SSH key is the public half of a cryptographic identity. Generate one with `ssh-keygen -t ed25519`.
 Never upload or copy the private key.
 
+## Importing from another Git host
+
+An administrator can create a Bareline-managed repository from a public Git repository hosted
+elsewhere. First allowlist each exact source hostname in deployment configuration and restart:
+
+```yaml
+mirrors:
+  allowedHosts:
+    - github.com
+    - gitlab.example.com
+  importTimeoutMs: 300000
+  maxImportBytes: 10737418240
+  maxImportRefs: 10000
+```
+
+Open **Administration → Repositories → Import from another Git host**, enter the public HTTPS clone
+URL and destination owner/name, then inspect the advertised branches, tags, and default branch.
+Confirming the preview clones all Git refs into new managed bare-repository storage. A failed,
+cancelled, oversized, or timed-out import leaves no repository record and removes partial storage.
+
+Remote imports reject credentials in URLs, query strings, redirects, non-HTTPS transports,
+non-allowlisted hosts, and hosts resolving to private or reserved addresses. This first version is
+for public Git repositories; private-source credentials and Git LFS payload migration are not
+supported. LFS pointer files remain in Git, but their referenced objects must be migrated separately.
+Use a pull mirror after import only when Bareline should continue following the source repository.
+
 ## Git basics
 
 A commit is an immutable snapshot with a message and parent. A branch is a movable name pointing to

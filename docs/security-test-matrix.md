@@ -12,6 +12,7 @@ encryption, shared API authorization, and OpenAPI exposure.
 | Threat-model control                                 | Regression coverage                                                                                                               |
 | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | Traversal and symlinks                               | `validation.test.ts`, `repository-import.integration.test.ts`                                                                     |
+| Remote repository import and cleanup                 | `remote-repository-import.integration.test.ts`, `outbound-policy.test.ts`, `process-limits.test.ts`                               |
 | Command and option injection                         | `validation.test.ts`, `ssh.test.ts`, `repository.integration.test.ts`                                                             |
 | Hostile Git configuration and hooks                  | `git-runner-limits.test.ts`, `repository.integration.test.ts`                                                                     |
 | DNS-aware SSRF and proxy allowlists                  | `outbound-policy.test.ts`, `backup-destination.test.ts`, `ip-policy.test.ts`, mirror/plugin integration coverage                  |

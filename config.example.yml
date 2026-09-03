@@ -16,10 +16,14 @@ database:
 git:
   executable: git
 
-# Exact hostnames allowed for repository mirrors. Empty disables remote mirrors.
+# Exact hostnames allowed for remote repository imports and mirrors. Empty disables both.
 mirrors:
   allowedHosts: []
   timeoutMs: 15000
+  # One-time public HTTPS imports use the same host allowlist and have separate hard ceilings.
+  importTimeoutMs: 300000
+  maxImportBytes: 10737418240
+  maxImportRefs: 10000
 search:
   # Empty indexes only each repository's configured default branch.
   indexedBranches: []

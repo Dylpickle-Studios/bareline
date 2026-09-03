@@ -6,8 +6,9 @@ Bareline is a lightweight, server-rendered home for repositories, files, commits
 tags, blame, search, cloning, and pushing.
 
 Git-focused collaboration includes protected branches, repository-scoped read-only deploy keys,
-scheduled pull/push mirrors, trusted signature identities, repository templates, activity feeds,
-pinned/recent repositories, conflict-safe browser editing, and encrypted off-site backup uploads.
+allowlisted public HTTPS repository imports, scheduled pull/push mirrors, trusted signature
+identities, repository templates, activity feeds, pinned/recent repositories, conflict-safe browser
+editing, and encrypted off-site backup uploads.
 It also includes repository issues, wikis, tag-backed releases, patches, forks, branch operations,
 and lightweight repository insights. See [the repository workflows guide](docs/repository-workflows.md).
 

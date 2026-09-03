@@ -17,6 +17,8 @@ unit tests alone.
 - [x] WebAssembly memory, message, request, pending-work, timeout, and worker-lifecycle limits
 - [x] HTTPS-only, credential-free, allowlisted outbound Git/mirror/plugin requests with DNS
       rebinding and private/reserved-address protection; redirects are not followed
+- [x] Administrator-only public HTTPS repository import with metadata preview, bounded clone
+      execution, reference/storage ceilings, audit records, and partial-state cleanup
 - [x] Atomic staged backups, online SQLite snapshots including WAL sidecars, authenticated manifests,
       checksum verification, staged restore, rollback, and recoverable pre-restore data
 - [x] Explicit backup policy scheduling, bounded retention, isolated restore verification, and

@@ -68,6 +68,10 @@ server-rendered repository workflows, not REST API families. Use their HTML UI r
 undocumented API endpoints; the OpenAPI document is the authoritative list of supported automation
 surfaces.
 
+One-time remote repository import is likewise an administrator-only HTML workflow. Scheduled mirror
+configuration remains available through the repository mirror API; creating a repository from an
+external URL does not currently have a REST endpoint.
+
 ## Users, groups, and administration
 
 User responses omit credentials and hidden email. Group responses are limited to members and expose

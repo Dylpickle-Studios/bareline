@@ -1,11 +1,13 @@
 import { randomBytes } from 'node:crypto';
 import { product } from '../app/metadata.js';
-import { lstat, mkdir, realpath, rm } from 'node:fs/promises';
+import { lstat, mkdir, opendir, realpath, rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import type { AuditService } from '../audit/audit-service.js';
 import type { AppConfig } from '../config/config.js';
 import type { Database } from '../database/database.js';
+import { GitError } from '../git/errors.js';
 import type { GitRunner } from '../git/git-runner.js';
+import { OutboundPolicy, OutboundPolicyError } from '../security/outbound-policy.js';
 import {
   ValidationError,
   validateObjectId,
@@ -37,6 +39,14 @@ interface RepositoryRow {
   forked_from_id: number | null;
 }
 
+export interface RemoteImportPreview {
+  sourceHost: string;
+  defaultBranch: string | null;
+  branches: number;
+  tags: number;
+  refs: number;
+}
+
 export class RepositoryService {
   private publishEvent: RepositoryEventPublisher = () => undefined;
 
@@ -45,6 +55,7 @@ export class RepositoryService {
     private readonly git: GitRunner,
     private readonly config: AppConfig,
     private readonly audit: AuditService,
+    private readonly outboundPolicy = new OutboundPolicy(),
   ) {}
 
   setEventPublisher(publisher: RepositoryEventPublisher): void {
@@ -209,6 +220,197 @@ export class RepositoryService {
       visibility: input.visibility,
       sourcePath: input.sourcePath,
     });
+  }
+
+  /** Inspects a public HTTPS repository before an administrator confirms a remote import. */
+  async previewRemoteImport(input: {
+    actorUserId: number;
+    ownerType: 'user' | 'group';
+    ownerSlug: string;
+    slug: string;
+    sourceUrl: string;
+    signal?: AbortSignal;
+  }): Promise<RemoteImportPreview> {
+    this.requireAdministrator(input.actorUserId);
+    this.remoteImportDestination(input.ownerType, input.ownerSlug, input.slug);
+    const source = await this.safeRemoteImportSource(input.sourceUrl);
+    let result;
+    try {
+      result = await this.git.run(
+        [
+          '-c',
+          'http.followRedirects=false',
+          'ls-remote',
+          '--symref',
+          '--',
+          source.toString(),
+          'HEAD',
+          'refs/heads/*',
+          'refs/tags/*',
+        ],
+        {
+          timeoutMs: this.config.mirrors?.timeoutMs ?? 15_000,
+          maxOutputBytes: this.config.limits.gitOutputBytes,
+          ...(input.signal ? { signal: input.signal } : {}),
+        },
+      );
+    } catch (error) {
+      throw remoteGitError(error, 'Remote repository could not be inspected');
+    }
+    const preview = parseRemoteRefs(result.stdout, this.config.mirrors?.maxImportRefs ?? 10_000);
+    return { sourceHost: source.hostname, ...preview };
+  }
+
+  /** Creates a hosted bare repository by cloning every ref from a public HTTPS source. */
+  async importRemoteByOwnerName(input: {
+    actorUserId: number;
+    ownerType: 'user' | 'group';
+    ownerSlug: string;
+    slug: string;
+    description?: string;
+    visibility: Visibility;
+    sourceUrl: string;
+    signal?: AbortSignal;
+  }): Promise<Repository> {
+    this.requireAdministrator(input.actorUserId);
+    const { owner, slug } = this.remoteImportDestination(
+      input.ownerType,
+      input.ownerSlug,
+      input.slug,
+    );
+    const description = (input.description ?? '').trim();
+    if (description.length > 500) throw new ValidationError('Description is too long');
+
+    // Resolve again immediately before Git runs so a preview cannot bypass DNS-rebinding checks.
+    const source = await this.safeRemoteImportSource(input.sourceUrl);
+    const storageId = randomBytes(32).toString('hex');
+    const storagePath = this.hostedPath(storageId);
+    const maximumRefs = this.config.mirrors?.maxImportRefs ?? 10_000;
+    const maximumBytes = this.config.mirrors?.maxImportBytes ?? 10 * 1024 * 1024 * 1024;
+    let repositoryId: number | null = null;
+    try {
+      await mkdir(join(storagePath, '..'), { recursive: true, mode: 0o750 });
+      await this.git.run(
+        [
+          '-c',
+          'http.followRedirects=false',
+          'clone',
+          '--mirror',
+          '--no-local',
+          '--',
+          source.toString(),
+          storagePath,
+        ],
+        {
+          timeoutMs: this.config.mirrors?.importTimeoutMs ?? 300_000,
+          maxOutputBytes: this.config.limits.gitOutputBytes,
+          ...(input.signal ? { signal: input.signal } : {}),
+        },
+      );
+      const [head, refs, importedBytes] = await Promise.all([
+        this.git.run(['--git-dir', storagePath, 'symbolic-ref', '--short', 'HEAD'], {
+          acceptedExitCodes: [0, 1],
+          maxOutputBytes: 1024,
+        }),
+        this.git.run(['--git-dir', storagePath, 'for-each-ref', '--format=%(refname)'], {
+          maxOutputBytes: this.config.limits.gitOutputBytes,
+        }),
+        boundedDirectorySize(storagePath, maximumBytes),
+      ]);
+      const importedRefs = refs.stdout.toString('utf8').split('\n').filter(Boolean);
+      if (importedRefs.length > maximumRefs)
+        throw new RemoteImportError(
+          'Remote repository exceeds the configured reference limit',
+          413,
+        );
+      const headName = head.exitCode === 0 ? head.stdout.toString('utf8').trim() : '';
+      const defaultBranch = headName ? validateRef(headName.replace(/^refs\/heads\//, '')) : 'main';
+      const now = new Date().toISOString();
+      const result = this.database
+        .prepare(
+          `INSERT INTO repositories(owner_type, owner_id, slug, description, visibility,
+          storage_id, storage_kind, default_branch, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, 'hosted_bare', ?, ?, ?)`,
+        )
+        .run(
+          input.ownerType,
+          owner.id,
+          slug,
+          description,
+          input.visibility,
+          storageId,
+          defaultBranch,
+          now,
+          now,
+        );
+      repositoryId = Number(result.lastInsertRowid);
+      const repository = this.getById(repositoryId);
+      this.audit.record({
+        actorUserId: input.actorUserId,
+        action: 'repository.remoteImported',
+        targetType: 'repository',
+        targetId: String(repository.id),
+        metadata: {
+          sourceHost: source.hostname,
+          refs: importedRefs.length,
+          bytes: importedBytes,
+          visibility: input.visibility,
+        },
+      });
+      this.publishEvent('repository.created', repositoryEvent(repository));
+      return repository;
+    } catch (error) {
+      if (repositoryId !== null)
+        this.database.prepare('DELETE FROM repositories WHERE id=?').run(repositoryId);
+      await rm(storagePath, { recursive: true, force: true }).catch(() => undefined);
+      if (error instanceof ValidationError || error instanceof RemoteImportError) throw error;
+      throw remoteGitError(error, 'Remote repository could not be imported');
+    }
+  }
+
+  private requireAdministrator(userId: number): void {
+    const administrator = this.database
+      .prepare("SELECT id FROM users WHERE id = ? AND status = 'active' AND is_admin = 1")
+      .get(userId);
+    if (!administrator) throw new AuthorizationError();
+  }
+
+  private remoteImportDestination(
+    ownerType: 'user' | 'group',
+    ownerSlug: string,
+    slugInput: string,
+  ): { owner: { id: number }; slug: string } {
+    const table = ownerType === 'user' ? 'users' : 'groups';
+    const column = ownerType === 'user' ? 'username' : 'slug';
+    const owner = this.database
+      .prepare(`SELECT id FROM ${table} WHERE ${column} = ?`)
+      .get(ownerSlug.toLowerCase()) as { id: number } | undefined;
+    if (!owner) throw new ValidationError('Repository owner does not exist');
+    const slug = validateSlug(slugInput, 'repository');
+    const duplicate = this.database
+      .prepare(
+        'SELECT id FROM repositories WHERE owner_type=? AND owner_id=? AND slug=? AND deleted_at IS NULL',
+      )
+      .get(ownerType, owner.id, slug);
+    if (duplicate) throw new RemoteImportError('A repository with that name already exists', 409);
+    return { owner, slug };
+  }
+
+  private async safeRemoteImportSource(input: string): Promise<URL> {
+    let source: URL;
+    try {
+      source = await this.outboundPolicy.assertSafeUrl(input, {
+        allowedHosts: this.config.mirrors?.allowedHosts ?? [],
+        protocols: ['https:'],
+        ports: [443],
+      });
+    } catch (error) {
+      if (error instanceof OutboundPolicyError) throw new RemoteImportError(error.message, 400);
+      throw error;
+    }
+    if (source.search || source.hash)
+      throw new RemoteImportError('Remote import URLs must not contain a query or fragment', 400);
+    return source;
   }
 
   private async createOwned(input: {
@@ -764,6 +966,75 @@ function repositoryEvent(repository: Repository): Readonly<Record<string, unknow
   };
 }
 
+function parseRemoteRefs(
+  output: Buffer,
+  maximumRefs: number,
+): Omit<RemoteImportPreview, 'sourceHost'> {
+  const branches = new Set<string>();
+  const tags = new Set<string>();
+  let defaultBranch: string | null = null;
+  for (const line of output.toString('utf8').split('\n')) {
+    if (!line) continue;
+    const symbolic = /^ref:\s+(refs\/heads\/(.+))\tHEAD$/.exec(line);
+    if (symbolic?.[2]) {
+      defaultBranch = validateRef(symbolic[2]);
+      continue;
+    }
+    const match = /^[0-9a-f]{40,64}\t(refs\/(heads|tags)\/(.+))$/.exec(line);
+    if (!match?.[1] || !match[2] || !match[3]) continue;
+    const name = match[1].replace(/\^\{\}$/, '');
+    if (match[2] === 'heads') branches.add(name);
+    else tags.add(name);
+    if (branches.size + tags.size > maximumRefs)
+      throw new RemoteImportError('Remote repository exceeds the configured reference limit', 413);
+  }
+  return {
+    defaultBranch,
+    branches: branches.size,
+    tags: tags.size,
+    refs: branches.size + tags.size,
+  };
+}
+
+async function boundedDirectorySize(root: string, maximumBytes: number): Promise<number> {
+  const pending = [root];
+  let bytes = 0;
+  let entries = 0;
+  while (pending.length > 0) {
+    const directoryPath = pending.pop();
+    if (!directoryPath) continue;
+    const directory = await opendir(directoryPath);
+    for await (const entry of directory) {
+      entries += 1;
+      if (entries > 200_000)
+        throw new RemoteImportError('Remote repository contains too many storage entries', 413);
+      const path = join(directoryPath, entry.name);
+      if (entry.isSymbolicLink())
+        throw new RemoteImportError('Remote repository storage contains an unexpected link', 400);
+      if (entry.isDirectory()) {
+        pending.push(path);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      bytes += (await lstat(path)).size;
+      if (bytes > maximumBytes)
+        throw new RemoteImportError('Remote repository exceeds the configured import size', 413);
+    }
+  }
+  return bytes;
+}
+
+function remoteGitError(error: unknown, message: string): RemoteImportError {
+  if (error instanceof RemoteImportError) return error;
+  if (error instanceof GitError && error.code === 'timeout')
+    return new RemoteImportError('Remote Git operation exceeded the configured time limit', 503);
+  if (error instanceof GitError && error.code === 'cancelled')
+    return new RemoteImportError('Remote Git operation was cancelled', 400);
+  if (error instanceof GitError && error.code === 'output_limit')
+    return new RemoteImportError('Remote repository returned too much metadata', 413);
+  return new RemoteImportError(message, 400);
+}
+
 function parseTree(output: Buffer): TreeEntry[] {
   return output
     .toString('utf8')
@@ -795,5 +1066,14 @@ export class PayloadTooLargeError extends Error {
 
   constructor(readonly bytes: number | null = null) {
     super('Repository blob exceeds the configured rendering limit');
+  }
+}
+
+export class RemoteImportError extends Error {
+  constructor(
+    message: string,
+    readonly statusCode: 400 | 409 | 413 | 503,
+  ) {
+    super(message);
   }
 }

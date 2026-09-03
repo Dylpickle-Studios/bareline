@@ -92,6 +92,9 @@ const configSchema = z
       .object({
         allowedHosts: z.array(configuredHostname).max(100).default([]),
         timeoutMs: positiveInt.max(300_000).default(15_000),
+        importTimeoutMs: positiveInt.max(3_600_000).default(300_000),
+        maxImportBytes: positiveInt.max(1024 * 1024 * 1024 * 1024).default(10 * 1024 * 1024 * 1024),
+        maxImportRefs: positiveInt.max(1_000_000).default(10_000),
       })
       .strict()
       .optional(),

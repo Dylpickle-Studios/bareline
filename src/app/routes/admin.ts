@@ -20,6 +20,19 @@ export function registerAdminRoutes(context: AppRouteContext): void {
     requireAdministrator,
     pluginAdminPage,
   } = context;
+
+  const adminRepositoriesPage = async (
+    current: ReturnType<typeof requireAdministrator>,
+    options: { error?: string; values?: runtime.FormBody } = {},
+  ) =>
+    await render('admin-repositories', {
+      user: current.user,
+      csrf: current.csrfToken,
+      repositories: administration.repositories(),
+      error: options.error ?? null,
+      values: options.values ?? {},
+      remoteImportEnabled: (config.mirrors?.allowedHosts.length ?? 0) > 0,
+    });
   app.get('/admin/plugins', async (request, reply) => {
     const current = requireAdministrator(request);
     return reply.type('text/html').send(await pluginAdminPage(current));
@@ -124,13 +137,7 @@ export function registerAdminRoutes(context: AppRouteContext): void {
 
   app.get('/admin/repositories', async (request, reply) => {
     const current = requireAdministrator(request);
-    return reply.type('text/html').send(
-      await render('admin-repositories', {
-        user: current.user,
-        csrf: current.csrfToken,
-        repositories: administration.repositories(),
-      }),
-    );
+    return reply.type('text/html').send(await adminRepositoriesPage(current));
   });
 
   app.post('/admin/repositories/import', async (request, reply) => {
@@ -148,6 +155,78 @@ export function registerAdminRoutes(context: AppRouteContext): void {
     });
     search.enqueue(repository.id);
     return await reply.redirect(`/${repository.ownerSlug}/${repository.slug}`);
+  });
+
+  app.post('/admin/repositories/import-remote/preview', async (request, reply) => {
+    const current = requireAdministrator(request);
+    const body = request.body as runtime.FormBody;
+    auth.verifyCsrf(current.csrfToken, body.csrf);
+    const cancellation = requestCancellation(request);
+    try {
+      const preview = await repositories.previewRemoteImport({
+        actorUserId: current.user.id,
+        ownerType: body.ownerType === 'group' ? 'group' : 'user',
+        ownerSlug: body.ownerSlug ?? '',
+        slug: body.slug ?? '',
+        sourceUrl: body.sourceUrl ?? '',
+        signal: cancellation.signal,
+      });
+      return await reply.type('text/html').send(
+        await render('admin-remote-import-preview', {
+          user: current.user,
+          csrf: current.csrfToken,
+          preview,
+          values: body,
+        }),
+      );
+    } catch (error) {
+      const statusCode = importErrorStatus(error);
+      return await reply
+        .code(statusCode)
+        .type('text/html')
+        .send(
+          await adminRepositoriesPage(current, {
+            error: runtime.safeErrorMessage(error),
+            values: body,
+          }),
+        );
+    } finally {
+      cancellation.dispose();
+    }
+  });
+
+  app.post('/admin/repositories/import-remote', async (request, reply) => {
+    const current = requireAdministrator(request);
+    const body = request.body as runtime.FormBody;
+    auth.verifyCsrf(current.csrfToken, body.csrf);
+    const cancellation = requestCancellation(request);
+    try {
+      const repository = await repositories.importRemoteByOwnerName({
+        actorUserId: current.user.id,
+        ownerType: body.ownerType === 'group' ? 'group' : 'user',
+        ownerSlug: body.ownerSlug ?? '',
+        slug: body.slug ?? '',
+        description: body.description ?? '',
+        visibility: body.visibility === 'public' ? 'public' : 'private',
+        sourceUrl: body.sourceUrl ?? '',
+        signal: cancellation.signal,
+      });
+      search.enqueue(repository.id);
+      return await reply.redirect(`/${repository.ownerSlug}/${repository.slug}`);
+    } catch (error) {
+      const statusCode = importErrorStatus(error);
+      return await reply
+        .code(statusCode)
+        .type('text/html')
+        .send(
+          await adminRepositoriesPage(current, {
+            error: runtime.safeErrorMessage(error),
+            values: body,
+          }),
+        );
+    } finally {
+      cancellation.dispose();
+    }
   });
 
   app.get('/admin/audit', async (request, reply) => {
@@ -427,4 +506,23 @@ addEventListener('message', async (event) => {
     await pluginManager.remove(current.user.id, parameters.pluginId, body.keepData === 'yes');
     return await reply.redirect('/admin/plugins');
   });
+}
+
+function requestCancellation(request: {
+  raw: {
+    once(event: 'aborted', listener: () => void): unknown;
+    off(event: 'aborted', listener: () => void): unknown;
+  };
+}): { signal: AbortSignal; dispose: () => void } {
+  const controller = new AbortController();
+  const abort = (): void => {
+    controller.abort();
+  };
+  request.raw.once('aborted', abort);
+  return { signal: controller.signal, dispose: () => void request.raw.off('aborted', abort) };
+}
+
+function importErrorStatus(error: unknown): 400 | 409 | 413 | 503 {
+  const status = (error as { statusCode?: number }).statusCode;
+  return status === 409 || status === 413 || status === 503 ? status : 400;
 }

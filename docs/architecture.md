@@ -22,7 +22,9 @@ reaching into app construction. Request, Git, plugin, backup, and queue metrics 
 exposed through trusted `/metrics`; `/livez` and `/readyz` serve separate orchestration purposes.
 
 Repository enhancements remain metadata around Git rather than alternate representations of Git
-objects. A minute worker processes bounded batches of due mirrors; remote hosts require an explicit
+objects. Administrators may clone a public HTTPS remote into new managed bare storage after a
+bounded metadata preview; failures remove partial storage before any repository becomes visible.
+A minute worker processes bounded batches of due mirrors; remote hosts require an explicit
 YAML allowlist. Template creation fetches refs into a fresh opaque bare repository and removes both
 storage and metadata if population fails. Activity stores bounded event summaries, not commits or
 file content. Trusted signer records annotate Git's verification result without changing it.

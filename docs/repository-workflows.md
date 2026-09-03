@@ -4,6 +4,10 @@ Bareline provides repository-centred collaboration without a pull-request system
 otherwise, repository visibility and read permission determine whether a person can view a workflow;
 write permission is required for operations that change Git data or repository content.
 
+Administrators can also create a new managed repository by previewing and importing every Git ref
+from an allowlisted public HTTPS URL. See [Getting Started](getting-started.md#importing-from-another-git-host)
+for configuration, security limits, and current LFS and authentication constraints.
+
 ## Issues
 
 Each repository has numbered issues with Markdown descriptions, comments, open/closed state, labels,

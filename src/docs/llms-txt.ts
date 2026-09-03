@@ -41,6 +41,7 @@ export function llmsTxt(publicUrl: string): string {
   lines.push(
     '- Repositories: `GET /:owner/:repo` (tree/README), `/tree/*`, `/blob/*`, `/raw/*`, `/commits`, `/commit/:id`, `/blame/*`, `/branches`, `/tags`, `/compare?base=&head=`, `/archive?ref=&format=zip|tar.gz`.',
     '- Cloning and pushing: HTTPS Smart HTTP and SSH (forced-command) at the same repository path; see the Git guide below.',
+    '- Remote import: administrators can preview and clone all refs from an allowlisted public HTTPS Git URL into new Bareline-managed storage; private-source credentials and LFS payload migration are not supported.',
     '- Search: `GET /search?q=` for code, commits, and repositories; `GET /api/v1/palette?q=` for the command palette.',
     '- Git LFS: standard `git-lfs` batch API is served at the repository path.',
     '',

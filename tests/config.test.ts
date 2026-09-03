@@ -9,6 +9,11 @@ describe('YAML configuration', () => {
     });
     expect(config.server.port).toBe(3456);
     expect(config.server.publicUrl).toBe('https://git.example.test');
+    expect(config.mirrors).toMatchObject({
+      importTimeoutMs: 300_000,
+      maxImportBytes: 10 * 1024 * 1024 * 1024,
+      maxImportRefs: 10_000,
+    });
   });
 
   it('ships a container configuration rooted in the persistent volume', () => {

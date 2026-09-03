@@ -15,6 +15,12 @@ Keep hosted repositories, trash, LFS, and the SQLite database on persistent stor
 configured `storage.importRoots` may contain imported repositories; the application never scans the
 host filesystem. Working-tree imports are browse-only for server writes.
 
+One-time remote imports and scheduled mirrors share `mirrors.allowedHosts`, but imports have separate
+`importTimeoutMs`, `maxImportBytes`, and `maxImportRefs` ceilings. Keep the repository storage volume
+under an operating-system or container quota as defense in depth: `maxImportBytes` is verified after
+Git finishes receiving the pack, while the process timeout and Git concurrency queue bound active
+work. Remote imports support public HTTPS repositories only and do not copy Git LFS payloads.
+
 ## Backups
 
 Set `security.masterKey` before creating production backups. It authenticates the manifest as well

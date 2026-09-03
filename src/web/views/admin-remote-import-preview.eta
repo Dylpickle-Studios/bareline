@@ -1,0 +1,20 @@
+<section class="admin-shell">
+  <nav class="settings-nav" aria-label="Administration"><a href="/admin">Overview</a><a href="/admin/users">Users</a><a aria-current="page" href="/admin/repositories">Repositories</a><a href="/admin/plugins">Plugins</a><a href="/admin/audit">Audit log</a></nav>
+  <div class="settings-content">
+    <header><p class="eyebrow">Remote import</p><h1>Confirm repository import</h1></header>
+    <p>Bareline reached <strong><%= it.preview.sourceHost %></strong> and found <strong><%= it.preview.branches %></strong> branches and <strong><%= it.preview.tags %></strong> tags.<% if (it.preview.defaultBranch) { %> Its advertised default branch is <code><%= it.preview.defaultBranch %></code>.<% } %></p>
+    <p class="notice">Importing may take several minutes. Bareline applies configured time, reference, output, and post-clone storage limits and removes partial storage if the operation fails or is cancelled. Git LFS payloads are not copied.</p>
+    <dl class="system-list"><div><dt>Source</dt><dd><%= it.values.sourceUrl %></dd></div><div><dt>Destination</dt><dd><%= it.values.ownerSlug %>/<%= it.values.slug %></dd></div><div><dt>Visibility</dt><dd><%= it.values.visibility === 'public' ? 'Public' : 'Private' %></dd></div></dl>
+    <form method="post" action="/admin/repositories/import-remote" class="form-stack">
+      <input type="hidden" name="csrf" value="<%= it.csrf %>">
+      <input type="hidden" name="sourceUrl" value="<%= it.values.sourceUrl %>">
+      <input type="hidden" name="ownerType" value="<%= it.values.ownerType === 'group' ? 'group' : 'user' %>">
+      <input type="hidden" name="ownerSlug" value="<%= it.values.ownerSlug %>">
+      <input type="hidden" name="slug" value="<%= it.values.slug %>">
+      <input type="hidden" name="description" value="<%= it.values.description || '' %>">
+      <input type="hidden" name="visibility" value="<%= it.values.visibility === 'public' ? 'public' : 'private' %>">
+      <button class="button primary" type="submit">Import repository</button>
+      <a class="button" href="/admin/repositories">Cancel</a>
+    </form>
+  </div>
+</section>
