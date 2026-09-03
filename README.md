@@ -9,6 +9,7 @@ Git-focused collaboration includes protected branches, repository-scoped read-on
 allowlisted public HTTPS repository imports, scheduled pull/push mirrors, trusted signature
 identities, repository templates, activity feeds, pinned/recent repositories, conflict-safe browser
 editing, and encrypted off-site backup uploads.
+
 It also includes repository issues, wikis, tag-backed releases, patches, forks, branch operations,
 and lightweight repository insights. See [the repository workflows guide](docs/repository-workflows.md).
 
@@ -62,6 +63,42 @@ npm run build
 node dist/cli/index.js token create --user alice --write --config config.yml
 git clone http://alice:TOKEN@localhost:3000/alice/example.git
 ```
+
+## Importing from another Git host
+
+Bareline administrators can create a managed repository by importing every branch and tag from a
+public HTTPS Git URL. Remote imports are disabled until the exact source host is allowlisted:
+
+```yaml
+mirrors:
+  allowedHosts:
+    - github.com
+    - gitlab.example.com
+  timeoutMs: 15000
+  importTimeoutMs: 300000
+  maxImportBytes: 10737418240
+  maxImportRefs: 10000
+```
+
+After restarting Bareline, open **Administration → Repositories → Import from another Git host**.
+Enter the source clone URL and destination owner, repository name, description, and visibility.
+Bareline first previews the source's branches, tags, and default branch; confirm that preview to
+perform the import.
+
+The import runs as a bounded Git subprocess and creates a Bareline-managed bare repository. Source
+URLs must use HTTPS on port 443. Bareline rejects URL credentials, query strings, redirects,
+non-allowlisted hosts, DNS answers for private or reserved addresses, excessive ref counts, and
+imports exceeding configured time or storage limits. Failed or cancelled imports remove partial
+storage and do not create a repository record.
+
+Remote import currently supports public repositories only. Private-source credentials and Git LFS
+object migration are not supported; LFS pointer files are imported, but their objects must be moved
+separately. Configure a pull mirror in the imported repository's settings if Bareline should keep
+synchronizing from the original host.
+
+For the full workflow and operational guidance, see
+[Getting Started](docs/getting-started.md#importing-from-another-git-host) and
+[Operations](docs/operations.md#configuration).
 
 ## Security
 
