@@ -40,17 +40,19 @@ into service. The release workflow publishes the archive, its SHA-256 sidecar, a
 the SBOM with its own Sigstore bundle:
 
 ```sh
-sha256sum -c bareline-v1.1.0-linux-x64.tar.gz.sha256
-cosign verify-blob bareline-v1.1.0-linux-x64.tar.gz \
-  --bundle bareline-v1.1.0-linux-x64.tar.gz.sigstore.json \
-  --certificate-identity 'https://github.com/Dylpickle-Studios/bareline/.github/workflows/release.yml@refs/tags/v1.1.0' \
+RELEASE_TAG=v1.2.0
+ARCHIVE="bareline-${RELEASE_TAG}-linux-x64.tar.gz"
+sha256sum -c "${ARCHIVE}.sha256"
+cosign verify-blob "$ARCHIVE" \
+  --bundle "${ARCHIVE}.sigstore.json" \
+  --certificate-identity "https://github.com/Dylpickle-Studios/bareline/.github/workflows/release.yml@refs/tags/${RELEASE_TAG}" \
   --certificate-oidc-issuer 'https://token.actions.githubusercontent.com'
-cosign verify-blob bareline-v1.1.0.SBOM.spdx.json \
-  --bundle bareline-v1.1.0.SBOM.spdx.json.sigstore.json \
-  --certificate-identity 'https://github.com/Dylpickle-Studios/bareline/.github/workflows/release.yml@refs/tags/v1.1.0' \
+cosign verify-blob "bareline-${RELEASE_TAG}.SBOM.spdx.json" \
+  --bundle "bareline-${RELEASE_TAG}.SBOM.spdx.json.sigstore.json" \
+  --certificate-identity "https://github.com/Dylpickle-Studios/bareline/.github/workflows/release.yml@refs/tags/${RELEASE_TAG}" \
   --certificate-oidc-issuer 'https://token.actions.githubusercontent.com'
-tar -xzf bareline-v1.1.0-linux-x64.tar.gz
-cd bareline-1.1.0-linux-x64
+tar -xzf "$ARCHIVE"
+cd "bareline-${RELEASE_TAG#v}-linux-x64"
 sha256sum -c SHA256SUMS
 ```
 

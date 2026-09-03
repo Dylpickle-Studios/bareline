@@ -1108,7 +1108,7 @@ function showGroups(create = false) {
 const adminSections = {
   overview: [
     'System overview',
-    `<div class="metrics"><div><strong>1</strong><span>Users</span></div><div><strong>1</strong><span>Groups</span></div><div><strong>2</strong><span>Repositories</span></div><div><strong>1</strong><span>Plugins</span></div><div><strong>1</strong><span>Sessions</span></div></div><dl class="system-list"><dt>Application</dt><dd>1.1.0</dd><dt>Node.js</dt><dd>v24 LTS</dd><dt>Git</dt><dd>git version 2.47.3</dd><dt>SQLite</dt><dd>WAL · healthy</dd><dt>Repository storage</dt><dd>Writable · 2 repositories</dd><dt>SSH</dt><dd>Enabled</dd></dl>`,
+    `<div class="metrics"><div><strong>1</strong><span>Users</span></div><div><strong>1</strong><span>Groups</span></div><div><strong>2</strong><span>Repositories</span></div><div><strong>1</strong><span>Plugins</span></div><div><strong>1</strong><span>Sessions</span></div></div><dl class="system-list"><dt>Application</dt><dd>1.2.0</dd><dt>Node.js</dt><dd>v24 LTS</dd><dt>Git</dt><dd>git version 2.47.3</dd><dt>SQLite</dt><dd>WAL · healthy</dd><dt>Repository storage</dt><dd>Writable · 2 repositories</dd><dt>SSH</dt><dd>Enabled</dd></dl>`,
   ],
   users: [
     'Users',

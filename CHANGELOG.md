@@ -2,7 +2,7 @@
 
 All notable changes follow Keep a Changelog. This project uses semantic versioning after 1.0.
 
-## [Unreleased]
+## [1.2.0] - 2026-09-03
 
 ### Added
 
