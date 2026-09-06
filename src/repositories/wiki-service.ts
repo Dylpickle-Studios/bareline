@@ -97,27 +97,29 @@ export class WikiService {
     const path = this.path(repository);
     const head = await this.headCommit(path);
     if (!head) return [];
-    const result = await this.git.run([
-      '--git-dir',
-      path,
-      'log',
-      '--name-only',
-      '--diff-filter=A',
-      '--format=%x01%H%x00%aI%x00%s%x02',
-      '--end-of-options',
-      head,
-    ]);
-    const pages = new Map<string, WikiPageSummary>();
-    for (const entry of result.stdout.toString('utf8').split('\x01').slice(1)) {
-      const [header, filesBlock] = entry.split('\x02');
-      const [, authoredAt, subject] = (header ?? '').split('\x00');
-      for (const file of (filesBlock ?? '').split('\n')) {
-        const name = file.trim().replace(/\.md$/, '');
-        if (name.length > 0 && !pages.has(name))
-          pages.set(name, { name, updatedAt: authoredAt ?? '', subject: subject ?? '' });
-      }
+    const listing = await this.git.run(['--git-dir', path, 'ls-tree', '--name-only', '-z', head]);
+    const names = listing.stdout
+      .toString('utf8')
+      .split('\0')
+      .filter((file) => file.endsWith('.md'))
+      .map((file) => validatePageName(file.slice(0, -3)));
+    if (names.length > 1000) throw new ValidationError('Wiki page count exceeds the listing limit');
+    const pages: WikiPageSummary[] = [];
+    for (const name of names) {
+      const result = await this.git.run([
+        '--git-dir',
+        path,
+        'log',
+        '-1',
+        '--format=%aI%x00%s',
+        head,
+        '--',
+        `${name}.md`,
+      ]);
+      const [updatedAt = '', subject = ''] = result.stdout.toString('utf8').trimEnd().split('\0');
+      pages.push({ name, updatedAt, subject });
     }
-    return [...pages.values()].sort((left, right) => left.name.localeCompare(right.name));
+    return pages.sort((left, right) => left.name.localeCompare(right.name));
   }
 
   async readPage(repository: Repository, pageInput: string): Promise<string | null> {
@@ -148,7 +150,7 @@ export class WikiService {
     content: string;
     message: string;
   }): Promise<void> {
-    this.repositories.require(input.repository, input.actorUserId, 'write');
+    this.repositories.requireMutable(input.repository, input.actorUserId);
     const page = validatePageName(input.page);
     if (input.content.length > this.config.limits.filePreviewBytes)
       throw new ValidationError('Wiki page exceeds the configured size limit');
@@ -190,7 +192,7 @@ export class WikiService {
       await this.git.run(
         oldCommit
           ? ['--git-dir', path, 'update-ref', `refs/heads/${wikiBranch}`, commitId, oldCommit]
-          : ['--git-dir', path, 'update-ref', `refs/heads/${wikiBranch}`, commitId],
+          : ['--git-dir', path, 'update-ref', `refs/heads/${wikiBranch}`, commitId, '0'.repeat(40)],
       );
     } catch (error) {
       if (error instanceof GitError)
@@ -238,7 +240,7 @@ export class WikiService {
     page: string;
     message: string;
   }): Promise<void> {
-    this.repositories.require(input.repository, input.actorUserId, 'write');
+    this.repositories.requireMutable(input.repository, input.actorUserId);
     const page = validatePageName(input.page);
     const path = this.path(input.repository);
     const oldCommit = await this.headCommit(path);

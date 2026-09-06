@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import type { FastifyReply } from 'fastify';
 import type { AppRouteContext } from './route-context.js';
 import * as runtime from './route-runtime.js';
@@ -324,7 +325,13 @@ export function registerAuthPublicRoutes(context: AppRouteContext): void {
   app.get('/auth/oidc/:providerId', async (request, reply) => {
     const providerId = (request.params as { providerId: string }).providerId;
     const returnPath = (request.query as { return?: string }).return ?? '/';
-    return await reply.redirect((await externalAuth.beginOidc(providerId, returnPath)).href);
+    const binding = randomBytes(32).toString('base64url');
+    const target = await externalAuth.beginOidc(providerId, returnPath, binding);
+    reply.setCookie('oidc_binding', binding, {
+      ...runtime.cookieOptions(config, true),
+      maxAge: 600,
+    });
+    return await reply.redirect(target.href);
   });
 
   app.get('/auth/oidc/:providerId/callback', async (request, reply) => {
@@ -332,9 +339,11 @@ export function registerAuthPublicRoutes(context: AppRouteContext): void {
     const result = await externalAuth.completeOidc(
       providerId,
       new URL(request.url, config.server.publicUrl),
+      request.cookies.oidc_binding,
       request.id,
       request.ip,
     );
+    reply.clearCookie('oidc_binding', runtime.cookieOptions(config, true));
     const created = auth.createSession(result.user.id, request.headers['user-agent']);
     reply.setCookie('session', created.token, {
       ...runtime.cookieOptions(config, true),

@@ -4,6 +4,24 @@ Read the [changelog](../CHANGELOG.md) and verify that the target release support
 Node.js and Git versions. Perform upgrades during a maintenance window; Bareline supports one
 serving process and does not support concurrent writers.
 
+## Audit remediation upgrade
+
+Database migration 22 invalidates unfinished OIDC login transactions. Users with a login in
+progress must start it again; existing sessions are unaffected.
+
+Backups now include `wikis` and `releases` directories, even when empty. Restore and restore
+verification reject a backup at schema 20 or later if either directory is missing: those schemas
+support collaboration data, and older backups may have silently omitted it. Retain a separate
+snapshot of `storage.data/wikis` and `storage.data/releases` before upgrading an affected
+installation, then create and verify a new complete backup with the upgraded application.
+Pre-schema-20 backups remain supported; restoring them clears the collaboration directories
+instead of retaining data from the destination installation.
+
+Outbound HTTPS integrations and Git operations now connect directly to a validated public IP,
+with the original hostname retained for TLS or SSH identity verification. Git mirror SSH
+connections ignore client configuration and require an existing trusted host key for the original
+hostname. Proxy-dependent deployments should verify these integrations during the upgrade.
+
 ## Before upgrading
 
 1. Set and securely retain a 32-byte base64url `security.masterKey`. It is required for authenticated

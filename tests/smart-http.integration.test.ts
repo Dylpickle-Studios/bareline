@@ -1,7 +1,8 @@
+import { WebhookService } from '../src/webhooks/webhook-service.js';
 import { access, mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createApp } from '../src/app/create-app.js';
 import { AuditService } from '../src/audit/audit-service.js';
 import { AuthService } from '../src/auth/auth-service.js';
@@ -53,6 +54,8 @@ describe('Git Smart HTTP', () => {
 
   it('authenticates a scoped token and accepts a real push', async () => {
     const config = temporaryConfig();
+    config.security.masterKey = Buffer.alloc(32, 7).toString('base64url');
+    config.webhooks.allowedHosts = ['example.com'];
     const database = openDatabase(config.database.path);
     const audit = new AuditService(database);
     const auth = new AuthService(database, config, audit);
@@ -83,6 +86,12 @@ describe('Git Smart HTTP', () => {
       name: 'push test',
       scopes: ['repository:read', 'repository:write'],
     });
+    const webhook = new WebhookService(database, config, audit).create(
+      repository.id,
+      user.id,
+      'https://example.com/hooks',
+      ['repository.pushed'],
+    );
     database.close();
 
     const app = await createApp(config);
@@ -98,6 +107,23 @@ describe('Git Smart HTTP', () => {
       await git.run(['-C', checkout, 'push', 'origin', 'main']);
 
       const verificationDatabase = openDatabase(config.database.path);
+      await vi.waitFor(() => {
+        expect(
+          verificationDatabase
+            .prepare('SELECT count(*) AS count FROM webhook_deliveries WHERE webhook_id = ?')
+            .get(webhook.id),
+        ).toEqual({ count: 1 });
+      });
+      await git.run(['--git-dir', repositoryPath, 'config', 'receive.denyNonFastForwards', 'true']);
+      await git.run(['-C', checkout, 'reset', '--hard', 'HEAD~1']);
+      await expect(
+        git.run(['-C', checkout, 'push', '--force', 'origin', 'main']),
+      ).rejects.toThrow();
+      expect(
+        verificationDatabase
+          .prepare('SELECT count(*) AS count FROM webhook_deliveries WHERE webhook_id = ?')
+          .get(webhook.id),
+      ).toEqual({ count: 1 });
       const verificationService = new RepositoryService(
         verificationDatabase,
         git,

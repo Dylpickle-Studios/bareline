@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
 import { mkdir, rename, stat, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -51,14 +51,9 @@ export class LfsService {
           actions: { download: this.action(repository, object.oid) },
         };
       }
-      if (existing) {
+      if (existing && linked) {
         if (existing.size !== object.size)
           throw new LfsInputError('LFS object size does not match existing object', 409);
-        this.database
-          .prepare(
-            'INSERT OR IGNORE INTO repository_lfs_objects(repository_id, object_id) VALUES (?, ?)',
-          )
-          .run(repository.id, object.oid);
         return { oid: object.oid, size: object.size };
       }
       this.database
@@ -99,7 +94,7 @@ export class LfsService {
     const directory = join(this.config.storage.lfs, objectId.slice(0, 2));
     await mkdir(directory, { recursive: true, mode: 0o750 });
     const finalPath = join(directory, objectId);
-    const temporaryPath = `${finalPath}.${String(process.pid)}.${String(Date.now())}.tmp`;
+    const temporaryPath = `${finalPath}.${randomUUID()}.tmp`;
     const verifier = new HashAndLimit(pending.expected_size, this.config.limits.lfsObjectBytes);
     try {
       await pipeline(

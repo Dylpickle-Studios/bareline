@@ -410,30 +410,38 @@ export class RepositoryEnhancementService {
     const path = await this.repositories.storagePath(repository);
     const now = new Date();
     try {
-      const remote = await this.outboundPolicy.assertSafeGitTarget(mirror.remoteUrl, {
+      const remote = await this.outboundPolicy.prepareGitTarget(mirror.remoteUrl, {
         allowedHosts: this.allowedMirrorHosts,
       });
       if (mirror.direction === 'pull')
-        await this.git.run([
-          '-c',
-          'http.followRedirects=false',
-          '--git-dir',
-          path,
-          'fetch',
-          '--prune',
-          remote,
-          '+refs/*:refs/*',
-        ]);
+        await this.git.run(
+          [
+            ...remote.arguments,
+            '-c',
+            'http.followRedirects=false',
+            '--git-dir',
+            path,
+            'fetch',
+            '--prune',
+            remote.target,
+            '+refs/*:refs/*',
+          ],
+          { env: remote.env },
+        );
       else
-        await this.git.run([
-          '-c',
-          'http.followRedirects=false',
-          '--git-dir',
-          path,
-          'push',
-          '--mirror',
-          remote,
-        ]);
+        await this.git.run(
+          [
+            ...remote.arguments,
+            '-c',
+            'http.followRedirects=false',
+            '--git-dir',
+            path,
+            'push',
+            '--mirror',
+            remote.target,
+          ],
+          { env: remote.env },
+        );
       this.database
         .prepare(
           `UPDATE repository_mirrors SET last_run_at=?, last_success_at=?, last_error=NULL,

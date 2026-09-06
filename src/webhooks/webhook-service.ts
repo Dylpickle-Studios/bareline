@@ -166,10 +166,8 @@ export class WebhookService {
         `webhook:${String(delivery.repositoryId)}`,
       );
       const signature = `sha256=${createHmac('sha256', secret).update(delivery.payloadJson).digest('hex')}`;
-      const response = await fetch(target, {
-        method: 'POST',
-        redirect: 'error',
-        signal: AbortSignal.timeout(this.config.webhooks.timeoutMs),
+      const response = await this.policy.post(target, {
+        timeoutMs: this.config.webhooks.timeoutMs,
         headers: {
           'content-type': 'application/json',
           'user-agent': 'Bareline-Webhooks/1.1',

@@ -647,4 +647,14 @@ export const migrations: readonly Migration[] = [
       CREATE INDEX tokens_repository ON tokens(repository_id);
     `,
   },
+  {
+    version: 22,
+    name: 'audit_boundary_fixes',
+    sql: `
+      ALTER TABLE external_authentication_flows ADD COLUMN browser_binding BLOB;
+      DELETE FROM external_authentication_flows;
+      ALTER TABLE search_jobs ADD COLUMN generation INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE search_jobs ADD COLUMN claim_token TEXT;
+    `,
+  },
 ];

@@ -110,6 +110,8 @@ export class BackupService {
       this.config.storage.lfs,
       join(this.config.storage.data, 'plugins'),
       join(this.config.storage.data, 'plugin-trash'),
+      join(this.config.storage.data, 'wikis'),
+      join(this.config.storage.data, 'releases'),
     ]);
 
     const parent = dirname(destination);
@@ -131,6 +133,8 @@ export class BackupService {
         join(this.config.storage.data, 'plugin-trash'),
         join(staging, 'plugin-trash'),
       );
+      await safeCopyTree(join(this.config.storage.data, 'wikis'), join(staging, 'wikis'));
+      await safeCopyTree(join(this.config.storage.data, 'releases'), join(staging, 'releases'));
       const files = await checksums(staging, new Set(['manifest.json']));
       const externalRepositories = this.database
         .prepare(
@@ -234,6 +238,7 @@ export class BackupService {
 
     await assertRegularFile(join(source, 'app.db'), 'Backup is missing app.db');
     await assertRegularFile(join(source, 'config.yml'), 'Backup is missing config.yml');
+    await verifyCollaborationRoots(source);
     const targetDefinitions: RestoreTarget[] = [
       {
         name: 'app.db',
@@ -272,6 +277,12 @@ export class BackupService {
         target: join(config.storage.data, 'plugin-trash'),
         kind: 'directory',
       },
+      ...['wikis', 'releases'].map((name) => ({
+        name,
+        source: join(source, name),
+        target: join(config.storage.data, name),
+        kind: 'directory' as const,
+      })),
     ];
     assertRestoreTargetLayout(targetDefinitions, config.storage.data);
 
@@ -358,6 +369,7 @@ export class BackupService {
     const manifest = await BackupService.verify(source, options);
     await assertRegularFile(join(source, 'app.db'), 'Backup is missing app.db');
     await assertRegularFile(join(source, 'config.yml'), 'Backup is missing config.yml');
+    await verifyCollaborationRoots(source);
     for (const directory of ['repositories', 'repository-trash', 'lfs', 'plugins', 'plugin-trash'])
       await assertDirectory(join(source, directory), `Backup is missing ${directory}`);
 
@@ -371,6 +383,8 @@ export class BackupService {
         'lfs',
         'plugins',
         'plugin-trash',
+        'wikis',
+        'releases',
       ])
         await safeCopyTree(join(source, directory), join(staging, directory));
 
@@ -400,11 +414,11 @@ async function stageRestoreTargets(
   const staged: StagedRestoreTarget[] = [];
   for (const [index, definition] of definitions.entries()) {
     const info = await lstatIfExists(definition.source);
-    if (!info) continue;
+    if (!info && !['wikis', 'releases'].includes(definition.name)) continue;
     if (definition.kind === 'file') {
-      if (!info.isFile())
+      if (!info?.isFile())
         throw new BackupError(`Backup entry is not a regular file: ${definition.name}`);
-    } else if (!info.isDirectory()) {
+    } else if (info && !info.isDirectory()) {
       throw new BackupError(`Backup entry is not a directory: ${definition.name}`);
     }
     const stagedPath = join(stageRoot, `target-${String(index)}`);
@@ -727,4 +741,35 @@ function formatError(error: unknown): string {
 
 export class BackupError extends Error {
   readonly statusCode = 409;
+}
+
+/** Pre-collaboration backups may legitimately have no auxiliary roots. A newer
+ * database without them is an incomplete backup, never a successful restore. */
+async function verifyCollaborationRoots(source: string): Promise<void> {
+  const missing: string[] = [];
+  for (const name of ['wikis', 'releases']) {
+    const path = join(source, name);
+    if (await exists(path)) await assertDirectory(path, `Invalid backup directory: ${name}`);
+    else missing.push(name);
+  }
+  if (missing.length === 0) return;
+  // Even a readonly SQLite connection may create WAL sidecars. Inspect a copy so
+  // verification never changes the authenticated backup's file inventory.
+  const staging = await mkdtemp(join(tmpdir(), 'bareline-backup-schema-'));
+  try {
+    const path = join(staging, 'app.db');
+    await copyRegularFile(join(source, 'app.db'), path, 0o600);
+    const database = new BetterSqlite3(path, { readonly: true, fileMustExist: true });
+    try {
+      if (database.prepare('SELECT 1 FROM schema_migrations WHERE version >= 20 LIMIT 1').get()) {
+        throw new BackupError(
+          `Incomplete backup: missing ${missing.join(', ')}; create a new backup with collaboration storage included`,
+        );
+      }
+    } finally {
+      database.close();
+    }
+  } finally {
+    await rm(staging, { recursive: true, force: true });
+  }
 }

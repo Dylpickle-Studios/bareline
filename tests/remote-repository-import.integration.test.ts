@@ -20,6 +20,9 @@ class LocalRemoteGitRunner extends GitRunner {
     arguments_: readonly string[],
     options: GitRunOptions = {},
   ): Promise<GitResult> {
+    if (arguments_.includes('ls-remote') || arguments_.includes('clone')) {
+      expect(arguments_).toContain('http.curloptResolve=git.example:443:93.184.216.34');
+    }
     if (arguments_.includes('ls-remote')) {
       return {
         stdout: Buffer.from(

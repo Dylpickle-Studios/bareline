@@ -63,10 +63,8 @@ export class OtlpTracing {
         protocols: ['https:'],
         ports: [443],
       });
-      const response = await fetch(target, {
-        method: 'POST',
-        redirect: 'error',
-        signal: AbortSignal.timeout(5000),
+      const response = await this.policy.post(target, {
+        timeoutMs: 5000,
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           resourceSpans: [

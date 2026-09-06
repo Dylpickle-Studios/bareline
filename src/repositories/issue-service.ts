@@ -47,6 +47,12 @@ const MAX_TEXT_BYTES = 65_536;
 const PAGE_SIZE = 25;
 
 export class IssueService {
+  private onSearchChange: (repositoryId: number) => void = () => undefined;
+
+  setSearchUpdater(update: (repositoryId: number) => void): void {
+    this.onSearchChange = update;
+  }
+
   private publishEvent: IssueEventPublisher = () => undefined;
 
   constructor(
@@ -162,7 +168,7 @@ export class IssueService {
     actorUserId: number,
     input: { title: string; body: string; labelIds?: number[]; assigneeUserId?: number | null },
   ): IssueDetail {
-    this.repositories.require(repository, actorUserId, 'read');
+    this.repositories.requireMutable(repository, actorUserId, 'read');
     const title = validateTitle(input.title);
     const body = validateBody(input.body);
     const assigneeUserId = input.assigneeUserId ?? null;
@@ -195,6 +201,7 @@ export class IssueService {
       number,
     });
     this.publishEvent('issue.created', { repositoryId: repository.id, number });
+    this.onSearchChange(repository.id);
     return this.get(repository, actorUserId, number);
   }
 
@@ -231,6 +238,7 @@ export class IssueService {
         metadata: { repositoryId: repository.id, number },
       });
     }
+    this.onSearchChange(repository.id);
     return this.get(repository, actorUserId, number);
   }
 
@@ -258,6 +266,7 @@ export class IssueService {
       this.enhancements.recordActivity(repository.id, actorUserId, action, undefined, { number });
       this.publishEvent(action, { repositoryId: repository.id, number });
     }
+    this.onSearchChange(repository.id);
     return this.get(repository, actorUserId, number);
   }
 
@@ -267,7 +276,7 @@ export class IssueService {
     number: number,
     assigneeUserId: number | null,
   ): IssueDetail {
-    this.repositories.require(repository, actorUserId, 'write');
+    this.repositories.requireMutable(repository, actorUserId);
     const issue = this.findIssue(repository, number);
     this.validateAssignee(repository, assigneeUserId);
     const now = new Date().toISOString();
@@ -285,6 +294,7 @@ export class IssueService {
       number,
     });
     this.publishEvent('issue.assigned', { repositoryId: repository.id, number });
+    this.onSearchChange(repository.id);
     return this.get(repository, actorUserId, number);
   }
 
@@ -294,7 +304,7 @@ export class IssueService {
     number: number,
     labelIds: number[],
   ): IssueDetail {
-    this.repositories.require(repository, actorUserId, 'write');
+    this.repositories.requireMutable(repository, actorUserId);
     const issue = this.findIssue(repository, number);
     this.applyLabels(issue.id, repository.id, labelIds);
     const now = new Date().toISOString();
@@ -310,6 +320,7 @@ export class IssueService {
       number,
     });
     this.publishEvent('issue.labeled', { repositoryId: repository.id, number });
+    this.onSearchChange(repository.id);
     return this.get(repository, actorUserId, number);
   }
 
@@ -319,7 +330,7 @@ export class IssueService {
     number: number,
     body: string,
   ): IssueComment {
-    this.repositories.require(repository, actorUserId, 'read');
+    this.repositories.requireMutable(repository, actorUserId, 'read');
     const issue = this.findIssue(repository, number);
     const trimmed = validateCommentBody(body);
     const now = new Date().toISOString();
@@ -350,7 +361,7 @@ export class IssueService {
     commentId: number,
     body: string,
   ): IssueComment {
-    this.repositories.require(repository, actorUserId, 'read');
+    this.repositories.requireMutable(repository, actorUserId, 'read');
     const issue = this.findIssue(repository, number);
     const comment = this.findComment(issue.id, commentId, false);
     this.requireWriteOrAuthor(repository, actorUserId, comment.authorUserId);
@@ -375,7 +386,7 @@ export class IssueService {
     number: number,
     commentId: number,
   ): void {
-    this.repositories.require(repository, actorUserId, 'read');
+    this.repositories.requireMutable(repository, actorUserId, 'read');
     const issue = this.findIssue(repository, number);
     const comment = this.findComment(issue.id, commentId, false);
     this.requireWriteOrAuthor(repository, actorUserId, comment.authorUserId);
@@ -401,7 +412,7 @@ export class IssueService {
     name: string,
     color: string,
   ): IssueLabel {
-    this.repositories.require(repository, actorUserId, 'write');
+    this.repositories.requireMutable(repository, actorUserId);
     const trimmedName = name.trim();
     if (!trimmedName || trimmedName.length > 50)
       throw new IssueError('Label name must be between 1 and 50 characters');
@@ -432,7 +443,7 @@ export class IssueService {
   }
 
   removeLabel(repository: Repository, actorUserId: number, labelId: number): void {
-    this.repositories.require(repository, actorUserId, 'write');
+    this.repositories.requireMutable(repository, actorUserId);
     const result = this.database
       .prepare('DELETE FROM issue_labels WHERE id = ? AND repository_id = ?')
       .run(labelId, repository.id);
@@ -557,6 +568,7 @@ export class IssueService {
     actorUserId: number,
     ownerUserId: number | null,
   ): void {
+    this.repositories.requireMutable(repository, actorUserId, 'read');
     const level = this.repositories.permission(repository, actorUserId);
     const hasWrite = level === 'write' || level === 'admin' || level === 'owner';
     if (!hasWrite && actorUserId !== ownerUserId) throw new NotFoundError();

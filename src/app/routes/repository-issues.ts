@@ -10,7 +10,7 @@ function parseIssueNumber(value: string): number {
 
 // Repository issue-tracker routes: issues, comments, and labels.
 export function registerIssueHtmlRoutes(context: AppRouteContext): void {
-  const { app, auth, database, issues, repositories, search, render, readableRepository } = context;
+  const { app, auth, database, issues, repositories, render, readableRepository } = context;
 
   const canTriage = (repository: Repository, current: Session | null) =>
     !!current &&
@@ -87,7 +87,6 @@ export function registerIssueHtmlRoutes(context: AppRouteContext): void {
       labelIds: selectedLabelIds(body, availableLabels),
       assigneeUserId: resolveAssignee(body.assignee),
     });
-    search.enqueue(repository.id);
     return await reply.redirect(
       `/${repository.ownerSlug}/${repository.slug}/issues/${String(created.number)}`,
     );
@@ -143,7 +142,6 @@ export function registerIssueHtmlRoutes(context: AppRouteContext): void {
         selectedLabelIds(body, availableLabels),
       );
     } else throw new runtime.ValidationError('Invalid issue action');
-    search.enqueue(repository.id);
     return await reply.redirect(
       `/${repository.ownerSlug}/${repository.slug}/issues/${String(number)}`,
     );

@@ -79,7 +79,10 @@ export async function serveSmartHttp(
       killProcessGroup: process.platform !== 'win32',
       onSettle: (error) => {
         releaseTransport();
-        if (error) reject(error);
+        if (error) {
+          reply.raw.destroy();
+          reject(error);
+        }
       },
     });
     const cancelled = (): Error => new Error('Git HTTP transfer was cancelled');
@@ -93,6 +96,15 @@ export async function serveSmartHttp(
       resolve();
     };
 
+    child.stdin.on('error', () => {
+      proc.terminate(new Error('Git HTTP input failed'));
+    });
+    const writeResponse = (chunk: Buffer): void => {
+      if (!reply.raw.write(chunk)) child.stdout.pause();
+    };
+    const resume = () => child.stdout.resume();
+    reply.raw.on('drain', resume);
+    child.once('close', () => reply.raw.removeListener('drain', resume));
     child.on('error', () => {
       proc.settle(new Error('Unable to start Git HTTP backend'));
     });
@@ -106,17 +118,17 @@ export async function serveSmartHttp(
         return;
       }
       if (headersSent) {
-        reply.raw.write(chunk);
+        writeResponse(chunk);
         return;
       }
       headerBuffer = Buffer.concat([headerBuffer, chunk]);
-      if (headerBuffer.length > 32 * 1024) {
-        proc.terminate(new Error('Git HTTP response headers exceeded limit'));
-        return;
-      }
       const separator = headerBuffer.indexOf('\r\n\r\n');
       const alternateSeparator = headerBuffer.indexOf('\n\n');
       const index = separator >= 0 ? separator : alternateSeparator;
+      if ((index < 0 ? headerBuffer.length : index) > 32 * 1024) {
+        proc.terminate(new Error('Git HTTP response headers exceeded limit'));
+        return;
+      }
       if (index < 0) return;
       const separatorLength = separator >= 0 ? 4 : 2;
       let parsed: { status: number; headers: Record<string, string> };
@@ -130,7 +142,7 @@ export async function serveSmartHttp(
       }
       reply.raw.writeHead(parsed.status, parsed.headers);
       headersSent = true;
-      reply.raw.write(headerBuffer.subarray(index + separatorLength));
+      writeResponse(headerBuffer.subarray(index + separatorLength));
       headerBuffer = Buffer.alloc(0);
     });
     child.on('close', (code) => {

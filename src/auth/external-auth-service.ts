@@ -28,7 +28,9 @@ export class ExternalAuthService {
     return (this.config.authentication?.oidc ?? []).map(({ id, name }) => ({ id, name }));
   }
 
-  async beginOidc(providerId: string, returnPath = '/'): Promise<URL> {
+  async beginOidc(providerId: string, returnPath: string, browserToken: string): Promise<URL> {
+    if (!/^[A-Za-z0-9_-]{43}$/.test(browserToken))
+      throw new ExternalAuthError('OIDC browser binding is required');
     const provider = this.provider(providerId);
     const configuration = await this.oidcConfiguration(provider);
     const codeVerifier = oidc.randomPKCECodeVerifier();
@@ -36,7 +38,7 @@ export class ExternalAuthService {
     const nonce = randomBytes(32).toString('base64url');
     const redirectUri = new URL(`/auth/oidc/${provider.id}/callback`, this.config.server.publicUrl)
       .href;
-    const safeReturnPath = /^\/(?!\/)[^\r\n]{0,1000}$/.test(returnPath) ? returnPath : '/';
+    const safeReturnPath = localReturnPath(returnPath, this.config.server.publicUrl);
     const encrypted = this.secretBox?.encrypt(codeVerifier, `oidc:${provider.id}:${state}`);
     if (!encrypted) throw new ExternalAuthError('OIDC flow encryption is unavailable', 500);
     const now = new Date();
@@ -46,7 +48,7 @@ export class ExternalAuthService {
         .run(now.toISOString());
       this.database
         .prepare(
-          'INSERT INTO external_authentication_flows(state_hash, provider_id, code_verifier_encrypted, nonce, return_path, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          'INSERT INTO external_authentication_flows(state_hash, provider_id, code_verifier_encrypted, nonce, return_path, expires_at, created_at, browser_binding) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
         )
         .run(
           hashSecret(state),
@@ -56,6 +58,7 @@ export class ExternalAuthService {
           safeReturnPath,
           new Date(now.getTime() + 10 * 60_000).toISOString(),
           now.toISOString(),
+          hashSecret(browserToken),
         );
     })();
     const challenge = await oidc.calculatePKCECodeChallenge(codeVerifier);
@@ -72,17 +75,20 @@ export class ExternalAuthService {
   async completeOidc(
     providerId: string,
     callbackUrl: URL,
+    browserToken: string | undefined,
     requestId?: string,
     ip?: string,
   ): Promise<{ user: AuthenticatedUser; returnPath: string }> {
+    if (!browserToken || !/^[A-Za-z0-9_-]{43}$/.test(browserToken))
+      throw new ExternalAuthError('OIDC flow is invalid or expired');
     const provider = this.provider(providerId);
     const state = callbackUrl.searchParams.get('state');
     if (!state) throw new ExternalAuthError('OIDC state is missing');
     const flow = this.database
       .prepare(
-        'DELETE FROM external_authentication_flows WHERE state_hash = ? AND provider_id = ? AND expires_at >= ? RETURNING code_verifier_encrypted AS codeVerifier, nonce, return_path AS returnPath',
+        'DELETE FROM external_authentication_flows WHERE state_hash = ? AND provider_id = ? AND expires_at >= ? AND browser_binding = ? RETURNING code_verifier_encrypted AS codeVerifier, nonce, return_path AS returnPath',
       )
-      .get(hashSecret(state), provider.id, new Date().toISOString()) as
+      .get(hashSecret(state), provider.id, new Date().toISOString(), hashSecret(browserToken)) as
       { codeVerifier: Buffer; nonce: string; returnPath: string } | undefined;
     if (!flow || !this.secretBox) throw new ExternalAuthError('OIDC flow is invalid or expired');
     const codeVerifier = this.secretBox.decrypt(flow.codeVerifier, `oidc:${provider.id}:${state}`);
@@ -227,5 +233,24 @@ export class ExternalAuthError extends Error {
   constructor(message: string, statusCode = 400) {
     super(message);
     this.statusCode = statusCode;
+  }
+}
+
+/** Return only a normalized same-origin path, including for encoded separator inputs. */
+export function localReturnPath(value: string, publicUrl: string): string {
+  if (value.length > 1000 || !value.startsWith('/')) return '/';
+  try {
+    const decoded = decodeURIComponent(value);
+    const unsafe = (text: string) =>
+      Array.from(text).some(
+        (character) =>
+          character === '\\' || character.charCodeAt(0) <= 32 || character.charCodeAt(0) === 127,
+      );
+    if (unsafe(value) || unsafe(decoded) || decoded.startsWith('//')) return '/';
+    const url = new URL(value, publicUrl);
+    if (url.origin !== new URL(publicUrl).origin) return '/';
+    return url.pathname + url.search + url.hash;
+  } catch {
+    return '/';
   }
 }

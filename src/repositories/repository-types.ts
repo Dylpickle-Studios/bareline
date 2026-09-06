@@ -3,6 +3,7 @@ export type Visibility = 'public' | 'private';
 
 export type RepositoryEventPublisher = (
   event:
+    | 'repository.pushed'
     | 'repository.created'
     | 'repository.deleted'
     | 'repository.renamed'

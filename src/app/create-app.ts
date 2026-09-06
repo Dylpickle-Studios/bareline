@@ -133,6 +133,9 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
   const repositoryAdmin = new RepositoryAdminService(database, repositories, config, audit);
   const groups = new GroupService(database, audit);
   const search = new SearchService(database, git, repositories, browser, config);
+  issues.setSearchUpdater((repositoryId) => {
+    search.enqueue(repositoryId);
+  });
   const lfs = new LfsService(database, config);
   const pluginManager = new PluginManager(database, config, audit);
   const pluginContributions = new PluginContributionService(
@@ -409,7 +412,7 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
   const writableRepository = (request: FastifyRequest) => {
     const { repository, current } = readableRepository(request);
     if (!current) throw new AuthorizationError();
-    repositories.require(repository, current.user.id, 'write');
+    repositories.requireMutable(repository, current.user.id);
     return { repository, current };
   };
 
@@ -530,6 +533,7 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
     pluginManager,
     pluginContributions,
     pluginEvents,
+    publishRepositoryEvent,
     webhooks,
     administration,
     metrics,

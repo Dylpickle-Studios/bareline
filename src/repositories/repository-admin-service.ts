@@ -345,6 +345,18 @@ export class RepositoryAdminService {
     this.publishEvent('repository.deleted', repositoryEvent(repository));
   }
 
+  private async removeAuxiliaryFile(rootName: string, name: string): Promise<void> {
+    const root = join(this.config.storage.data, rootName);
+    try {
+      const info = await lstat(root);
+      if (!info.isDirectory() || info.isSymbolicLink())
+        throw new RepositoryAdminInputError('Unsafe auxiliary storage root', 409);
+      await rm(join(root, name), { recursive: true, force: true });
+    } catch (error) {
+      if (!isMissingFile(error)) throw error;
+    }
+  }
+
   async purgeExpiredTrash(): Promise<number> {
     await mkdir(this.config.storage.trash, { recursive: true, mode: 0o750 });
     const trashRoot = await realpath(this.config.storage.trash);
@@ -353,29 +365,45 @@ export class RepositoryAdminService {
     ).toISOString();
     const rows = this.database
       .prepare(
-        `SELECT id, storage_path AS storagePath FROM repositories
-         WHERE storage_kind = 'hosted_bare' AND deleted_at IS NOT NULL AND deleted_at <= ?`,
+        `SELECT id, storage_id AS storageId, storage_path AS storagePath, storage_kind AS storageKind FROM repositories
+         WHERE deleted_at IS NOT NULL AND deleted_at <= ?`,
       )
-      .all(cutoff) as { id: number; storagePath: string }[];
+      .all(cutoff) as { id: number; storageId: string; storagePath: string; storageKind: string }[];
     let purged = 0;
     for (const row of rows) {
-      const logicalRelative = relative(trashRoot, row.storagePath);
-      if (
-        !isAbsolute(row.storagePath) ||
-        logicalRelative === '' ||
-        logicalRelative.startsWith('..') ||
-        isAbsolute(logicalRelative)
-      )
-        continue;
-      try {
-        const info = await lstat(row.storagePath);
-        if (info.isSymbolicLink() || !info.isDirectory()) continue;
-        const canonical = await realpath(row.storagePath);
-        const canonicalRelative = relative(trashRoot, canonical);
-        if (canonicalRelative.startsWith('..') || isAbsolute(canonicalRelative)) continue;
-        await rm(canonical, { recursive: true, force: false });
-      } catch (error) {
-        if (!isMissingFile(error)) throw error;
+      if (row.storageKind === 'hosted_bare') {
+        const logicalRelative = relative(trashRoot, row.storagePath);
+        if (
+          !isAbsolute(row.storagePath) ||
+          logicalRelative === '' ||
+          logicalRelative.startsWith('..') ||
+          isAbsolute(logicalRelative)
+        )
+          continue;
+        try {
+          const info = await lstat(row.storagePath);
+          if (info.isSymbolicLink() || !info.isDirectory()) continue;
+          const canonical = await realpath(row.storagePath);
+          const canonicalRelative = relative(trashRoot, canonical);
+          if (canonicalRelative.startsWith('..') || isAbsolute(canonicalRelative)) continue;
+          await rm(canonical, { recursive: true, force: false });
+        } catch (error) {
+          if (!isMissingFile(error)) throw error;
+        }
+      }
+      // Keep the database row and attachment keys until every filesystem removal succeeds.
+      if (!/^[0-9a-f]{64}$/.test(row.storageId))
+        throw new RepositoryAdminInputError('Invalid wiki storage identifier', 409);
+      await this.removeAuxiliaryFile('wikis', `${row.storageId}.git`);
+      const assets = this.database
+        .prepare(
+          'SELECT a.storage_key AS storageKey FROM release_assets a JOIN releases r ON r.id = a.release_id WHERE r.repository_id = ?',
+        )
+        .all(row.id) as { storageKey: string }[];
+      for (const asset of assets) {
+        if (!/^[0-9a-f]{48}$/.test(asset.storageKey))
+          throw new RepositoryAdminInputError('Invalid asset storage identifier', 409);
+        await this.removeAuxiliaryFile('releases', asset.storageKey);
       }
       this.database.transaction(() => {
         this.audit.record({

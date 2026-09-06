@@ -211,6 +211,7 @@ export class PluginManager {
           'protocol.ext.allow=never',
           '-c',
           'http.followRedirects=false',
+          ...this.outboundPolicy.gitArguments(remote),
           '-c',
           'core.hooksPath=/dev/null',
           'clone',

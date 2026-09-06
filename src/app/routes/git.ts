@@ -10,7 +10,8 @@ export function registerGitRoutes(context: AppRouteContext): void {
     enhancements,
     search,
     lfs,
-    pluginEvents,
+    publishRepositoryEvent,
+    git,
     session,
     gitPrincipal,
     gitAuthenticationRequired,
@@ -138,9 +139,14 @@ export function registerGitRoutes(context: AppRouteContext): void {
     if (write && repository.archivedAt)
       return reply.code(403).send('Archived repositories are read-only.');
     if (write) enhancements.assertTransportWritable(repository.id);
+    const path = await repositories.storagePath(repository);
+    const refs = async () =>
+      (await git.run(['--git-dir', path, 'for-each-ref', '--format=%(refname) %(objectname)']))
+        .stdout;
+    const before = write ? await refs() : null;
     await runtime.serveSmartHttp(
       config,
-      await repositories.storagePath(repository),
+      path,
       {
         method: 'POST',
         pathSuffix: parameters.service,
@@ -155,10 +161,10 @@ export function registerGitRoutes(context: AppRouteContext): void {
       },
       reply,
     );
-    if (write) {
+    if (write && before && !(await refs()).equals(before)) {
       search.enqueue(repository.id);
       enhancements.recordActivity(repository.id, principal?.userId ?? null, 'repository.pushed');
-      pluginEvents.publish('repository.pushed', {
+      publishRepositoryEvent('repository.pushed', {
         repositoryId: repository.id,
         owner: repository.ownerSlug,
         repository: repository.slug,

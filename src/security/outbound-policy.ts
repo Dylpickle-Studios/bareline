@@ -1,3 +1,4 @@
+import { request as httpsRequest, type RequestOptions } from 'node:https';
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 import { domainToASCII } from 'node:url';
@@ -27,6 +28,7 @@ const systemResolver: HostResolver = async (hostname) => {
  * making network requests.
  */
 export class OutboundPolicy {
+  private readonly pins = new WeakMap<URL, { href: string; address: string }>();
   constructor(private readonly resolveHostname: HostResolver = systemResolver) {}
 
   validateUrl(input: string, rules: OutboundUrlRules): URL {
@@ -61,8 +63,115 @@ export class OutboundPolicy {
 
   async assertSafeUrl(input: string, rules: OutboundUrlRules): Promise<URL> {
     const url = this.validateUrl(input, rules);
-    await this.assertSafeHostname(url.hostname);
+    const addresses = await this.assertSafeHostname(url.hostname);
+    const address = addresses[0]?.address;
+    if (!address) throw new OutboundPolicyError('Outbound hostname has no address');
+    this.pins.set(url, { href: url.href, address });
     return url;
+  }
+
+  private pinnedAddress(url: URL): string {
+    const pin = this.pins.get(url);
+    if (pin?.href !== url.href)
+      throw new OutboundPolicyError('Outbound URL has no matching connection pin');
+    return pin.address;
+  }
+
+  /** Connect to the approved IP while verifying the original TLS identity. No proxy or new DNS lookup. */
+  httpsOptions(url: URL): RequestOptions {
+    if (url.protocol !== 'https:')
+      throw new OutboundPolicyError('Pinned HTTP requests require HTTPS');
+    const host = canonicalHostname(url.hostname);
+    if (!host) throw new OutboundPolicyError('Invalid TLS hostname');
+    return {
+      hostname: this.pinnedAddress(url),
+      port: Number(url.port || 443),
+      path: url.pathname + url.search,
+      servername: isIP(host) ? undefined : host,
+      rejectUnauthorized: true,
+      agent: false,
+      headers: { host: url.host },
+    };
+  }
+
+  async post(
+    url: URL,
+    options: { body: string; headers: Record<string, string>; timeoutMs: number },
+  ): Promise<{ ok: boolean; status: number }> {
+    const connection = this.httpsOptions(url);
+    return await new Promise((resolve, reject) => {
+      const request = httpsRequest(
+        {
+          ...connection,
+          method: 'POST',
+          headers: {
+            ...options.headers,
+            host: url.host,
+            'content-length': Buffer.byteLength(options.body),
+          },
+          signal: AbortSignal.timeout(options.timeoutMs),
+        },
+        (response) => {
+          let bytes = 0;
+          response.on('data', (chunk: Buffer) => {
+            bytes += chunk.length;
+            if (bytes > 65_536)
+              response.destroy(new OutboundPolicyError('Outbound response exceeds limit'));
+          });
+          response.on('error', reject);
+          response.on('end', () => {
+            const status = response.statusCode ?? 0;
+            resolve({ status, ok: status >= 200 && status < 300 });
+          });
+        },
+      );
+      request.on('error', reject);
+      request.end(options.body);
+    });
+  }
+
+  /** libcurl keeps the hostname for TLS and HTTP, but never resolves it again. */
+  gitArguments(url: URL): string[] {
+    const address = this.pinnedAddress(url);
+    const pinned = isIP(address) === 6 ? `[${address}]` : address;
+    return [
+      '-c',
+      'http.curloptResolve=',
+      '-c',
+      `http.curloptResolve=${url.hostname}:${url.port || '443'}:${pinned}`,
+      '-c',
+      'http.followRedirects=false',
+      '-c',
+      'http.proxy=',
+      '-c',
+      `http.${url.origin}/.proxy=`,
+      '-c',
+      'http.sslVerify=true',
+    ];
+  }
+
+  async prepareGitTarget(
+    input: string,
+    rules: Pick<OutboundUrlRules, 'allowedHosts' | 'maxLength'>,
+  ): Promise<{ target: string; arguments: string[]; env: Record<string, string> }> {
+    if (input.trim().startsWith('git@')) {
+      const target = this.validateSshTarget(input, rules.allowedHosts);
+      const host = /^git@([A-Za-z0-9.-]+):/.exec(target)?.[1];
+      if (!host) throw new OutboundPolicyError('Invalid SSH Git hostname');
+      const addresses = await this.assertSafeHostname(host);
+      const address = addresses[0]?.address;
+      if (!address) throw new OutboundPolicyError('Outbound hostname has no address');
+      // Both values come from strict hostname/IP parsers, never arbitrary command text.
+      return {
+        target,
+        arguments: [],
+        env: {
+          GIT_SSH_COMMAND: `ssh -F /dev/null -o HostName=${address} -o HostKeyAlias=${host} -o StrictHostKeyChecking=yes -o CheckHostIP=no`,
+        },
+      };
+    }
+    const url = await this.assertSafeUrl(input, { ...rules, protocols: ['https:'], ports: [443] });
+    return { target: url.href, arguments: this.gitArguments(url), env: {} };
   }
 
   validateGitTarget(
@@ -109,19 +218,18 @@ export class OutboundPolicy {
     return value;
   }
 
-  private async assertSafeHostname(input: string): Promise<void> {
+  private async assertSafeHostname(input: string): Promise<readonly ResolvedAddress[]> {
     const hostname = canonicalHostname(input);
     if (!hostname) throw new OutboundPolicyError('Outbound URL has an invalid hostname');
     if (isIP(hostname) !== 0) {
       if (isNonPublicAddress(hostname))
         throw new OutboundPolicyError('Outbound destination is a private or reserved address');
-      return;
+      return [{ address: hostname, family: isIP(hostname) as 4 | 6 }];
     }
     let first: readonly ResolvedAddress[];
     let second: readonly ResolvedAddress[];
     try {
-      // Resolve twice immediately before use. A public answer followed by a private answer is
-      // treated as unsafe, which catches common DNS-rebinding responses at the policy boundary.
+      // Reject inconsistent unsafe answers, then pin the actual connection to a checked address.
       first = await this.resolveHostname(hostname);
       second = await this.resolveHostname(hostname);
     } catch {
@@ -138,6 +246,7 @@ export class OutboundPolicy {
           'Outbound hostname resolves to a private or reserved address',
         );
     }
+    return addresses;
   }
 }
 

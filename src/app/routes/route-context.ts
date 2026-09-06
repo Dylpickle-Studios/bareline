@@ -1,3 +1,4 @@
+import type { RepositoryEventPublisher } from '../../repositories/repository-types.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { AdminService } from '../../admin/admin-service.js';
 import type { RuntimeSettingsService } from '../../admin/runtime-settings-service.js';
@@ -72,6 +73,7 @@ export interface AppRouteContext {
   pluginManager: PluginManager;
   pluginContributions: PluginContributionService;
   pluginEvents: PluginEventService;
+  publishRepositoryEvent: RepositoryEventPublisher;
   webhooks: WebhookService;
   administration: AdminService;
   metrics: MetricsRegistry;

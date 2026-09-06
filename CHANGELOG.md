@@ -2,6 +2,23 @@
 
 All notable changes follow Keep a Changelog. This project uses semantic versioning after 1.0.
 
+## [Unreleased]
+
+### Fixed
+
+- Require verified LFS uploads before linking objects from another repository; bind OIDC
+  transactions to their initiating browser and normalize local login return paths.
+- Pin outbound HTTPS and Git connections to validated public addresses while preserving TLS
+  or SSH host identity checks.
+- Include wiki history and release attachments in backup, restore, verification, and repository
+  purge; retain purge metadata until filesystem cleanup succeeds.
+- Enforce archived repository restrictions across issues, wikis, releases, and API writes.
+- Bound archive process concurrency and respect Git HTTP response backpressure.
+- Preserve search updates queued during rebuilds, fence expired workers, index issue API changes,
+  and filter inaccessible repositories before limiting search results.
+- Publish webhooks for successful Git HTTP ref changes, resolve releases through actual tags,
+  and list current wiki pages with their latest edit metadata.
+
 ## [1.2.0] - 2026-09-03
 
 ### Added

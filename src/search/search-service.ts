@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { AppConfig } from '../config/config.js';
 import type { Database } from '../database/database.js';
 import type { GitBrowser } from '../git/git-browser.js';
@@ -49,7 +50,8 @@ export class SearchService {
         INSERT INTO search_jobs(repository_id, kind, available_at, created_at)
         VALUES (?, 'repository', ?, ?)
         ON CONFLICT(repository_id, kind) DO UPDATE SET
-          state = 'pending', available_at = excluded.available_at, lease_until = NULL, error = NULL
+          state = CASE WHEN search_jobs.state = 'running' THEN 'running' ELSE 'pending' END,
+          generation = search_jobs.generation + 1, available_at = excluded.available_at, attempts = 0, error = NULL
       `,
       )
       .run(repositoryId, now, now);
@@ -57,59 +59,82 @@ export class SearchService {
 
   async processNext(): Promise<boolean> {
     const now = new Date();
+    const claimToken = randomUUID();
     const leaseUntil = new Date(now.getTime() + 5 * 60_000).toISOString();
     const job = this.database.transaction(() => {
       const candidate = this.database
         .prepare(
           `
-          SELECT id, repository_id FROM search_jobs
+          SELECT id, repository_id, generation FROM search_jobs
           WHERE available_at <= ? AND (state = 'pending' OR (state = 'running' AND lease_until < ?))
           ORDER BY available_at, id LIMIT 1
         `,
         )
         .get(now.toISOString(), now.toISOString()) as
-        { id: number; repository_id: number } | undefined;
+        { id: number; repository_id: number; generation: number } | undefined;
       if (!candidate) return null;
       const changed = this.database
         .prepare(
           `
-          UPDATE search_jobs SET state = 'running', lease_until = ?, attempts = attempts + 1
+          UPDATE search_jobs SET state = 'running', lease_until = ?, claim_token = ?, attempts = attempts + 1
           WHERE id = ? AND (state = 'pending' OR lease_until < ?)
         `,
         )
-        .run(leaseUntil, candidate.id, now.toISOString());
+        .run(leaseUntil, claimToken, candidate.id, now.toISOString());
       return changed.changes === 1 ? candidate : null;
     })();
     if (!job) return false;
     try {
-      await this.rebuildRepository(job.repository_id);
-      this.database.prepare('DELETE FROM search_jobs WHERE id = ?').run(job.id);
+      await this.rebuildRepository(job.repository_id, () =>
+        Boolean(
+          this.database
+            .prepare('SELECT 1 FROM search_jobs WHERE id = ? AND claim_token = ?')
+            .get(job.id, claimToken),
+        ),
+      );
+      this.database.transaction(() => {
+        this.database
+          .prepare('DELETE FROM search_jobs WHERE id = ? AND claim_token = ? AND generation = ?')
+          .run(job.id, claimToken, job.generation);
+        this.database
+          .prepare(
+            "UPDATE search_jobs SET state = 'pending', lease_until = NULL, claim_token = NULL WHERE id = ? AND claim_token = ?",
+          )
+          .run(job.id, claimToken);
+      })();
     } catch (error) {
       const row = this.database
-        .prepare('SELECT attempts FROM search_jobs WHERE id = ?')
-        .get(job.id) as { attempts: number } | undefined;
-      const attempts = row?.attempts ?? 1;
+        .prepare('SELECT attempts, generation FROM search_jobs WHERE id = ? AND claim_token = ?')
+        .get(job.id, claimToken) as { attempts: number; generation: number } | undefined;
+      if (!row) return true;
+      const changed = row.generation !== job.generation;
+      const attempts = changed ? 0 : row.attempts;
       const delay = Math.min(3600, 2 ** attempts * 5);
       this.database
         .prepare(
           `
-          UPDATE search_jobs SET state = ?, lease_until = NULL, available_at = ?, error = ? WHERE id = ?
+          UPDATE search_jobs SET state = ?, lease_until = NULL, claim_token = NULL, available_at = ?, error = ? WHERE id = ? AND claim_token = ?
         `,
         )
         .run(
           attempts >= 5 ? 'failed' : 'pending',
-          new Date(Date.now() + delay * 1000).toISOString(),
+          new Date(Date.now() + (changed ? 0 : delay * 1000)).toISOString(),
           error instanceof Error ? error.message.slice(0, 1000) : 'Unknown indexing error',
           job.id,
+          claimToken,
         );
     }
     return true;
   }
 
-  async rebuildRepository(repositoryId: number): Promise<void> {
+  async rebuildRepository(
+    repositoryId: number,
+    isCurrent: () => boolean = () => true,
+  ): Promise<void> {
     const repository = this.repositories.getById(repositoryId);
     const documents = await this.collect(repository);
     this.database.transaction(() => {
+      if (!isCurrent()) return;
       this.database
         .prepare('DELETE FROM search_documents WHERE repository_id = ?')
         .run(repository.id);
@@ -147,10 +172,30 @@ export class SearchService {
         SELECT resource_type, resource_id, repository_id, title, path,
           snippet(search_documents, 5, '⟦', '⟧', ' … ', 18) AS excerpt
         FROM search_documents WHERE search_documents MATCH ?
+          AND repository_id IN (
+            SELECT r.id FROM repositories r WHERE r.deleted_at IS NULL AND (
+              (r.visibility = 'public' AND ? = 1)
+              OR (r.owner_type = 'user' AND r.owner_id = ?)
+              OR (r.owner_type = 'group' AND EXISTS (SELECT 1 FROM group_members gm
+                  WHERE gm.group_id = r.owner_id AND gm.user_id = ? AND gm.role IN ('owner', 'manager')))
+              OR EXISTS (SELECT 1 FROM repository_grants rg WHERE rg.repository_id = r.id AND (
+                  (rg.principal_type = 'user' AND rg.principal_id = ?)
+                  OR (rg.principal_type = 'group' AND EXISTS (SELECT 1 FROM group_members gm
+                      WHERE gm.group_id = rg.principal_id AND gm.user_id = ?))))
+            )
+          )
         ORDER BY bm25(search_documents, 2.0, 1.0, 3.0) LIMIT ?
       `,
       )
-      .all(query, Math.min(Math.max(limit * 4, 30), 200)) as {
+      .all(
+        query,
+        this.config.anonymous.publicRepositories ? 1 : 0,
+        userId,
+        userId,
+        userId,
+        userId,
+        Math.min(Math.max(limit, 1), 100),
+      ) as {
       resource_type: string;
       resource_id: string;
       repository_id: number;

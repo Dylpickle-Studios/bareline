@@ -240,6 +240,7 @@ export class RepositoryService {
         [
           '-c',
           'http.followRedirects=false',
+          ...this.outboundPolicy.gitArguments(source),
           'ls-remote',
           '--symref',
           '--',
@@ -294,6 +295,7 @@ export class RepositoryService {
         [
           '-c',
           'http.followRedirects=false',
+          ...this.outboundPolicy.gitArguments(source),
           'clone',
           '--mirror',
           '--no-local',
@@ -655,6 +657,26 @@ export class RepositoryService {
     const actual = this.permission(repository, userId);
     if (levels[actual] < levels[minimum]) throw new NotFoundError();
     return actual;
+  }
+
+  /** Authorization plus a fresh lifecycle check for repository content changes. */
+  requireMutable(
+    repository: Repository,
+    userId: number,
+    minimum: 'read' | 'write' = 'write',
+  ): void {
+    const current = this.getById(repository.id);
+    this.require(current, userId, minimum);
+    if (current.archivedAt) throw new RepositoryReadOnlyError();
+  }
+
+  async resolveTag(repository: Repository, tag: string): Promise<string | null> {
+    const path = await this.storagePath(repository);
+    const ref = `refs/tags/${validateRef(tag)}`;
+    const result = await this.git.run(['--git-dir', path, 'show-ref', '--verify', '--quiet', ref], {
+      acceptedExitCodes: [0, 1],
+    });
+    return result.exitCode === 1 ? null : await this.resolveCommit(repository, ref);
   }
 
   async storagePath(repository: Repository): Promise<string> {
@@ -1075,5 +1097,12 @@ export class RemoteImportError extends Error {
     readonly statusCode: 400 | 409 | 413 | 503,
   ) {
     super(message);
+  }
+}
+
+export class RepositoryReadOnlyError extends Error {
+  readonly statusCode = 409;
+  constructor() {
+    super('This repository is archived and read-only');
   }
 }
