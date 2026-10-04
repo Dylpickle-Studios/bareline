@@ -26,6 +26,11 @@ All notable changes follow Keep a Changelog. This project uses semantic versioni
   production; `/assets/` requests no longer count against the rate limit.
 - Client-side request failures (401/403/404/4xx) are logged at `warn` without a stack trace.
 
+### Security
+
+- Updated production dependencies to patched releases: fastify 5.12.5, fast-uri 3.1.8,
+  brace-expansion 5.0.12, and markdown-it 14.3.2 (`npm audit --omit=dev` reports no findings).
+
 ### Fixed
 
 - Git Smart HTTP forwards `Content-Encoding: gzip` and `Git-Protocol` to `git http-backend`, so
