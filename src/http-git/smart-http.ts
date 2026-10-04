@@ -13,6 +13,10 @@ export interface SmartHttpRequest {
   queryService?: string;
   contentType?: string;
   contentLength?: string;
+  /** `Content-Encoding` of the request body; Git clients gzip upload-pack requests over 1 KiB. */
+  contentEncoding?: string;
+  /** The client's `Git-Protocol` header, which selects wire protocol v2 when forwarded. */
+  gitProtocol?: string;
   body?: Readable;
   authenticatedUserId?: number;
 }
@@ -40,6 +44,12 @@ export async function serveSmartHttp(
     throw new SmartHttpInputError(413);
   }
   const query = service ? `service=${encodeURIComponent(service)}` : '';
+  const contentEncoding = request.contentEncoding?.trim().toLowerCase() ?? '';
+  if (contentEncoding && !/^(?:identity|gzip|x-gzip)$/.test(contentEncoding))
+    throw new SmartHttpInputError(415);
+  const gitProtocol = request.gitProtocol?.trim() ?? '';
+  if (gitProtocol && !/^[A-Za-z0-9=:_.-]{1,256}$/.test(gitProtocol))
+    throw new SmartHttpInputError();
   const releaseTransport = await gitTransportLimiter.acquire();
   let child;
   try {
@@ -55,6 +65,12 @@ export async function serveSmartHttp(
         REQUEST_METHOD: request.method,
         CONTENT_TYPE: request.contentType ?? '',
         CONTENT_LENGTH: request.contentLength ?? '',
+        // git http-backend inflates gzip-encoded bodies itself when told about the encoding, and
+        // enables protocol v2 for the service when the client's Git-Protocol header reaches it.
+        ...(contentEncoding && contentEncoding !== 'identity'
+          ? { HTTP_CONTENT_ENCODING: contentEncoding }
+          : {}),
+        ...(gitProtocol ? { HTTP_GIT_PROTOCOL: gitProtocol } : {}),
         ...(request.authenticatedUserId
           ? { REMOTE_USER: String(request.authenticatedUserId) }
           : {}),
@@ -195,7 +211,13 @@ export class SmartHttpInputError extends Error {
   readonly statusCode: number;
 
   constructor(statusCode = 400) {
-    super(statusCode === 413 ? 'Git transfer is too large' : 'Invalid Git HTTP request');
+    super(
+      statusCode === 413
+        ? 'Git transfer is too large'
+        : statusCode === 415
+          ? 'Unsupported Git request encoding'
+          : 'Invalid Git HTTP request',
+    );
     this.statusCode = statusCode;
   }
 }

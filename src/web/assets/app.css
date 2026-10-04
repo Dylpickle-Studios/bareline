@@ -332,6 +332,25 @@ fieldset {
   color: var(--muted);
   margin: 0;
 }
+/* Shared repository bar rendered by the layout above every repository page. */
+.repo-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 1.5rem;
+  margin-block-end: 1.5rem;
+  border-block-end: 1px solid var(--border);
+}
+.repo-bar-title {
+  font-weight: 650;
+  text-decoration: none;
+  padding-block: 0.8rem;
+  white-space: nowrap;
+}
+.repo-bar .repo-nav {
+  flex: 1 1 auto;
+  border-block-end: 0;
+}
 .repo-nav {
   display: flex;
   gap: 1.25rem;
@@ -340,6 +359,31 @@ fieldset {
   border-block-end: 1px solid var(--border);
   overflow-x: auto;
   overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+}
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding-block: 0.5rem;
+}
+.explore-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.explore-filter label {
+  flex: 1 1 16rem;
+}
+.explore-filter input {
+  inline-size: 100%;
+}
+#palette-results a[aria-selected='true'] {
+  background: var(--surface-subtle);
+  outline: 2px solid color-mix(in srgb, var(--accent) 65%, transparent);
+  outline-offset: -2px;
 }
 .repo-nav a {
   padding-block: 0.8rem;
@@ -1479,6 +1523,15 @@ dialog::backdrop {
   }
   .repo-header h1 {
     font-size: 1.25rem;
+  }
+  .repo-bar {
+    gap: 0 1rem;
+  }
+  .repo-bar-title {
+    padding-block: 0.6rem 0.2rem;
+  }
+  .repo-nav {
+    gap: 1rem;
   }
   .file-tree li {
     grid-template-columns: 1.4rem minmax(0, 1fr);

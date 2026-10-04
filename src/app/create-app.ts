@@ -42,6 +42,7 @@ import {
   RepositoryService,
 } from '../repositories/repository-service.js';
 import { IssueService } from '../repositories/issue-service.js';
+import type { Repository } from '../repositories/repository-types.js';
 import { ReleaseService } from '../repositories/release-service.js';
 import { RepositoryMutationService } from '../repositories/repository-mutation-service.js';
 import { RepositoryEnhancementService } from '../repositories/repository-enhancement-service.js';
@@ -146,12 +147,36 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
   const pluginEvents = new PluginEventService(database, pluginManager, pluginContributions);
   const webhooks = new WebhookService(database, config, audit);
   const render = (view: string, data: Record<string, unknown>) => {
-    const account = data.user as { pluginTheme?: string | null } | null | undefined;
+    const account = data.user as { id: number; pluginTheme?: string | null } | null | undefined;
     const selectedTheme = account?.pluginTheme
       ? pluginContributions.theme(account.pluginTheme)
       : null;
+    const repository = repositoryContext(data.repository);
+    const navigation = repository
+      ? repositoryNavigation(view, repository, {
+          canAdmin:
+            account !== null &&
+            account !== undefined &&
+            ['admin', 'owner'].includes(repositories.permission(repository, account.id)),
+          pluginTabs: pluginContributions.repositoryTabs(repository, account?.id ?? null),
+          ...(typeof data.kind === 'string' ? { refsKind: data.kind } : {}),
+        })
+      : null;
+    const title =
+      typeof data.title === 'string'
+        ? data.title
+        : repository
+          ? [
+              typeof data.path === 'string' && data.path ? data.path : null,
+              `${repository.ownerSlug}/${repository.slug}`,
+            ]
+              .filter(Boolean)
+              .join(' · ')
+          : undefined;
     return renderView(view, {
       ...data,
+      ...(title === undefined ? {} : { title }),
+      repositoryNavigation: navigation,
       pluginNavigation: pluginContributions.navigation(),
       pluginThemeUrl: selectedTheme
         ? `/plugin-themes/${encodeURIComponent(selectedTheme.pluginId)}/${encodeURIComponent(selectedTheme.id)}.css`
@@ -271,6 +296,12 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
     void request;
     done(null, payload);
   });
+  // The git-lfs client sends batch requests with its own media type rather than application/json.
+  app.addContentTypeParser(
+    'application/vnd.git-lfs+json',
+    { parseAs: 'string', bodyLimit: 1024 * 1024 },
+    app.getDefaultJsonParser('ignore', 'ignore'),
+  );
   await app.register(helmet, {
     global: true,
     contentSecurityPolicy: {
@@ -285,7 +316,13 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
       },
     },
   });
-  await app.register(rateLimit, { max: 300, timeWindow: '1 minute' });
+  await app.register(rateLimit, {
+    max: 300,
+    timeWindow: '1 minute',
+    // Static assets are tiny, cacheable files that every page loads; counting them would let a
+    // handful of page views exhaust the budget intended for dynamic routes.
+    allowList: (request) => request.url.startsWith('/assets/'),
+  });
   await app.register(swagger, {
     openapi: {
       info: { title: `${product.name} API`, version: product.version },
@@ -298,11 +335,14 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
     },
   });
   await app.register(swaggerUi, { routePrefix: '/api/docs' });
+  // Asset URLs carry the product version as a cache-busting query (see layout.eta), so
+  // production responses can be cached for a long time without serving stale files after an
+  // upgrade.
   await app.register(staticFiles, {
     root: join(dirname(fileURLToPath(import.meta.url)), '..', 'web', 'assets'),
     prefix: '/assets/',
     immutable: process.env.NODE_ENV === 'production',
-    maxAge: process.env.NODE_ENV === 'production' ? '1h' : 0,
+    maxAge: process.env.NODE_ENV === 'production' ? '1y' : 0,
   });
 
   const searchTimer = setInterval(() => {
@@ -583,8 +623,15 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
       );
   });
   app.setErrorHandler(async (error, request, reply) => {
-    request.log.error({ err: error }, 'request failed');
     const statusCode = normalizeStatus(error);
+    // Expected client-side failures (missing pages, denied access, bad input) are routine and do
+    // not need a stack trace in the log; genuine server failures do.
+    if (statusCode >= 500) request.log.error({ err: error }, 'request failed');
+    else
+      request.log.warn(
+        { statusCode, reason: error instanceof Error ? error.message : String(error) },
+        'request rejected',
+      );
     const messages: Record<number, [string, string]> = {
       400: ['Invalid request', 'The request could not be understood.'],
       401: ['Sign in required', 'Sign in to continue.'],
@@ -592,6 +639,7 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
       404: ['Not found', 'That page does not exist or is not available to you.'],
       409: ['Conflict', 'The resource changed or this action conflicts with its current state.'],
       413: ['Too much data', 'The requested content exceeds a configured safety limit.'],
+      415: ['Unsupported format', 'The request body uses a format this endpoint does not accept.'],
       429: ['Slow down', 'Too many requests were received. Please try again shortly.'],
       500: ['Something went wrong', 'The request could not be completed.'],
       503: ['Temporarily unavailable', 'The service is not ready to complete this request.'],
@@ -610,6 +658,13 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
         },
       });
     }
+    // The Git LFS batch API expects JSON error documents, never an HTML page.
+    if (/^\/[^/]+\/[^/]+\.git\/info\/lfs\//.test(request.url)) {
+      return reply
+        .code(statusCode)
+        .type('application/vnd.git-lfs+json')
+        .send({ message, request_id: request.id });
+    }
     return reply
       .code(statusCode)
       .type('text/html')
@@ -627,6 +682,97 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
   return app;
 }
 
+interface RepositoryContext {
+  id: number;
+  ownerSlug: string;
+  slug: string;
+}
+
+/** Views receive many shapes of data; only a real repository record gets the shared navigation. */
+function repositoryContext(value: unknown): Repository | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const candidate = value as Partial<RepositoryContext>;
+  return typeof candidate.id === 'number' &&
+    typeof candidate.ownerSlug === 'string' &&
+    typeof candidate.slug === 'string'
+    ? (value as Repository)
+    : null;
+}
+
+export interface RepositoryNavigationItem {
+  label: string;
+  href: string;
+  current: boolean;
+}
+
+/** Which repository tab a view belongs to, so every repository page can show the same tab bar. */
+const viewTabs: Readonly<Record<string, string>> = {
+  repository: 'code',
+  tree: 'code',
+  blob: 'code',
+  blame: 'code',
+  'edit-file': 'code',
+  'upload-files': 'code',
+  commits: 'commits',
+  commit: 'commits',
+  'file-history': 'commits',
+  compare: 'compare',
+  merge: 'compare',
+  patches: 'patches',
+  'patch-preview': 'patches',
+  releases: 'releases',
+  release: 'releases',
+  'release-new': 'releases',
+  wiki: 'wiki',
+  'wiki-edit': 'wiki',
+  'wiki-history': 'wiki',
+  insights: 'insights',
+  issues: 'issues',
+  issue: 'issues',
+  'issue-new': 'issues',
+  'repository-labels': 'issues',
+  'repository-settings': 'settings',
+  'repository-activity': 'activity',
+};
+
+export function repositoryNavigation(
+  view: string,
+  repository: Repository,
+  options: {
+    canAdmin: boolean;
+    pluginTabs: readonly { title: string; url: string }[];
+    refsKind?: string;
+  },
+): { home: string; label: string; items: RepositoryNavigationItem[] } {
+  const home = `/${repository.ownerSlug}/${repository.slug}`;
+  const active =
+    view === 'refs' ? (options.refsKind === 'Tags' ? 'tags' : 'branches') : viewTabs[view];
+  const tab = (id: string, label: string, suffix: string): RepositoryNavigationItem => ({
+    label,
+    href: `${home}${suffix}`,
+    current: active === id,
+  });
+  return {
+    home,
+    label: `${repository.ownerSlug}/${repository.slug}`,
+    items: [
+      tab('code', 'Code', ''),
+      tab('commits', 'Commits', '/commits'),
+      tab('branches', 'Branches', '/branches'),
+      tab('tags', 'Tags', '/tags'),
+      tab('compare', 'Compare', '/compare'),
+      tab('patches', 'Patches', '/patches'),
+      tab('releases', 'Releases', '/releases'),
+      tab('wiki', 'Wiki', '/wiki'),
+      tab('insights', 'Insights', '/insights'),
+      tab('issues', 'Issues', '/issues'),
+      tab('activity', 'Activity', '/activity'),
+      ...options.pluginTabs.map((item) => ({ label: item.title, href: item.url, current: false })),
+      ...(options.canAdmin ? [tab('settings', 'Settings', '/settings')] : []),
+    ],
+  };
+}
+
 function cookieOptions(config: AppConfig, httpOnly: boolean) {
   return {
     path: '/',
@@ -641,7 +787,9 @@ function normalizeStatus(error: unknown): number {
   if (error instanceof AuthorizationError) return 403;
   if (error instanceof PayloadTooLargeError) return 413;
   const status = (error as { statusCode?: number }).statusCode;
-  return status && [400, 401, 403, 404, 409, 413, 429, 500, 503].includes(status) ? status : 500;
+  return status && [400, 401, 403, 404, 409, 413, 415, 429, 500, 503].includes(status)
+    ? status
+    : 500;
 }
 
 function apiErrorCode(status: number): string {
@@ -652,6 +800,7 @@ function apiErrorCode(status: number): string {
     404: 'not_found',
     409: 'conflict',
     413: 'payload_too_large',
+    415: 'unsupported_media_type',
     429: 'rate_limited',
     500: 'internal_error',
     503: 'unavailable',

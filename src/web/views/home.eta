@@ -1,10 +1,22 @@
+<% if (it.user) { %>
+<section class="repo-shell">
+  <header class="repo-header"><div><p class="eyebrow">Welcome back, <%= it.user.displayName %></p><h1>Your repositories</h1></div><span class="actions"><a class="button" href="/explore">Explore all<% if (it.accessibleCount) { %> · <%= it.accessibleCount %><% } %></a><a class="button primary" href="/repositories/new">Create repository</a></span></header>
+  <% if (!it.ownRepositories.length && !it.pinnedRepositories.length && !it.recentRepositories.length) { %>
+    <div class="empty"><h2>Nothing here yet</h2><p>Create a repository, or open one you can access from <a href="/explore">Explore</a>. Pinned and recently viewed repositories will appear on this page.</p></div>
+  <% } %>
+  <div class="settings-sections">
+    <% if (it.pinnedRepositories.length) { %><section><h2>Pinned</h2><ul class="credential-list"><% it.pinnedRepositories.forEach(function(repository) { %><li><a href="/<%= repository.ownerSlug %>/<%= repository.slug %>"><strong><%= repository.ownerSlug %>/<%= repository.slug %></strong></a><span><%= repository.description %></span></li><% }) %></ul></section><% } %>
+    <% if (it.recentRepositories.length) { %><section><h2>Recently viewed</h2><ul class="credential-list"><% it.recentRepositories.forEach(function(repository) { %><li><a href="/<%= repository.ownerSlug %>/<%= repository.slug %>"><strong><%= repository.ownerSlug %>/<%= repository.slug %></strong></a><span><%= repository.description %></span></li><% }) %></ul></section><% } %>
+    <% if (it.ownRepositories.length) { %><section><h2>Owned by you</h2><ul class="credential-list"><% it.ownRepositories.forEach(function(repository) { %><li><a href="/<%= repository.ownerSlug %>/<%= repository.slug %>"><strong><%= repository.slug %></strong></a><span><%= repository.visibility %><% if (repository.description) { %> · <%= repository.description %><% } %></span></li><% }) %></ul></section><% } %>
+  </div>
+</section>
+<% } else { %>
 <section class="hero">
   <p class="eyebrow">Git, without the clutter</p>
   <h1>A focused home for your repositories.</h1>
   <p>Browse code, understand history, and move work over SSH or HTTPS—without project-management machinery getting in the way.</p>
   <div class="actions">
-    <% if (it.user) { %><a class="button primary" href="/repositories/new">Create repository</a><% } else { %>
-    <a class="button primary" href="/register">Create your account</a><a class="button" href="/login">Sign in</a><% } %>
+    <a class="button primary" href="/register">Create your account</a><a class="button" href="/login">Sign in</a><a class="button" href="/explore">Explore public repositories</a>
   </div>
 </section>
-<% if (it.user && (it.pinnedRepositories.length || it.recentRepositories.length)) { %><section class="repo-shell"><div class="settings-sections"><% if (it.pinnedRepositories.length) { %><section><h2>Pinned repositories</h2><ul class="credential-list"><% it.pinnedRepositories.forEach(function(repository) { %><li><a href="/<%= repository.ownerSlug %>/<%= repository.slug %>"><strong><%= repository.ownerSlug %>/<%= repository.slug %></strong></a><span><%= repository.description %></span></li><% }) %></ul></section><% } %><% if (it.recentRepositories.length) { %><section><h2>Recently viewed</h2><ul class="credential-list"><% it.recentRepositories.forEach(function(repository) { %><li><a href="/<%= repository.ownerSlug %>/<%= repository.slug %>"><strong><%= repository.ownerSlug %>/<%= repository.slug %></strong></a></li><% }) %></ul></section><% } %></div></section><% } %>
+<% } %>

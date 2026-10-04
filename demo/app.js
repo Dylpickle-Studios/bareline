@@ -2,6 +2,7 @@ const storageKey = 'bareline-demo-v3';
 const seed = {
   view: 'code',
   branch: 'main',
+  commitPage: 1,
   file: null,
   directory: '',
   branches: ['main', 'feature/reading-mode'],
@@ -309,8 +310,19 @@ function recordCommit({ subject, file, before, after, author = 'Alice Nguyen', a
   state.activity.unshift({ action, detail: state.branch, time: 'just now' });
   return commit;
 }
+function formatBytes(bytes) {
+  if (bytes < 1000) return `${bytes} B`;
+  const units = ['KB', 'MB', 'GB'];
+  let value = bytes / 1000;
+  let unit = 0;
+  while (value >= 1000 && unit < units.length - 1) {
+    value /= 1000;
+    unit += 1;
+  }
+  return `${value.toFixed(value >= 100 ? 0 : 1)} ${units[unit]}`;
+}
 function fileRow(file, label = file) {
-  return `<li class="row"><span>·</span><button class="name" data-file="${escape(file)}">${escape(label)}</button><small>${state.files[file].length} B</small></li>`;
+  return `<li class="row"><span>·</span><button class="name" data-file="${escape(file)}">${escape(label)}</button><small>${formatBytes(state.files[file].length)}</small></li>`;
 }
 function showCode() {
   const top = latest();
@@ -329,7 +341,7 @@ function showCode() {
     .split('/')
     .filter(Boolean)
     .map((part, index, parts) => ({ name: part, path: parts.slice(0, index + 1).join('/') }));
-  app.innerHTML = `${state.directory ? `<nav class="breadcrumbs" aria-label="Breadcrumb"><button data-directory="">root</button>${crumbs.map((crumb) => `<span>/</span><button data-directory="${escape(crumb.path)}">${escape(crumb.name)}</button>`).join('')}</nav>` : ''}<div class="bar"><label><select id="branch" aria-label="Branch">${state.branches.map((branch) => `<option ${branch === state.branch ? 'selected' : ''}>${escape(branch)}</option>`).join('')}</select></label><span>Switch</span><small>${folders.length + files.length} items</small><button id="new-file">New file</button><button id="upload-file">Upload</button></div><div class="latest"><span><b class="sha">${top.id}</b> ${escape(top.subject)}</span><small>${escape(top.author || 'Alice Nguyen')} · ${top.time}</small></div><ul class="list">${folders.map((folder) => `<li class="row"><span class="folder">▰</span><button class="name" data-folder="${escape(prefix + folder)}">${escape(folder)}</button><small>folder</small></li>`).join('')}${files.map((file) => fileRow(file, file.slice(prefix.length))).join('')}</ul>${state.file ? showFile(state.file) : !state.directory && state.files['README.md'] ? `<section class="card"><header>README <button id="edit-readme">Edit</button></header><article class="markdown">${markdown(state.files['README.md'])}</article></section>` : ''}`;
+  app.innerHTML = `${state.directory ? `<nav class="breadcrumbs" aria-label="Breadcrumb"><button data-directory="">root</button>${crumbs.map((crumb) => `<span>/</span><button data-directory="${escape(crumb.path)}">${escape(crumb.name)}</button>`).join('')}</nav>` : ''}<div class="bar"><label><select id="branch" aria-label="Reference"><optgroup label="Branches">${state.branches.map((branch) => `<option ${branch === state.branch ? 'selected' : ''}>${escape(branch)}</option>`).join('')}</optgroup><optgroup label="Tags">${state.tags.map((tag) => `<option ${tag === state.branch ? 'selected' : ''}>${escape(tag)}</option>`).join('')}</optgroup></select></label><small>${folders.length + files.length} items</small><button id="new-file">New file</button><button id="upload-file">Upload</button></div><div class="latest"><span><b class="sha">${top.id}</b> ${escape(top.subject)}</span><small>${escape(top.author || 'Alice Nguyen')} · ${top.time}</small></div><ul class="list">${state.directory ? `<li class="row"><span class="folder">▰</span><button class="name" data-directory="${escape(state.directory.split('/').slice(0, -1).join('/'))}" aria-label="Parent directory">..</button><small></small></li>` : ''}${folders.map((folder) => `<li class="row"><span class="folder">▰</span><button class="name" data-folder="${escape(prefix + folder)}">${escape(folder)}</button><small>folder</small></li>`).join('')}${files.map((file) => fileRow(file, file.slice(prefix.length))).join('')}</ul>${state.file ? showFile(state.file) : !state.directory && state.files['README.md'] ? `<section class="card"><header>README <button id="edit-readme">Edit</button></header><article class="markdown">${markdown(state.files['README.md'])}</article></section>` : ''}`;
   document.querySelector('#branch').onchange = (event) => {
     state.branch = event.target.value;
     save();
@@ -363,10 +375,29 @@ function showCode() {
     );
 }
 function showFile(file) {
-  return `<section class="card"><header><span>${escape(file)}</span><span><button id="back">Back</button> <button id="edit">Edit</button></span></header><pre>${lines(state.files[file])}</pre></section>`;
+  const content = state.files[file];
+  const lineCount = content.split('\n').length - (content.endsWith('\n') ? 1 : 0);
+  return `<section class="card"><header><span>${escape(file)} <small>${formatBytes(content.length)} · ${lineCount} line${lineCount === 1 ? '' : 's'}</small></span><span><button id="back">Back</button> <button id="edit">Edit</button></span></header><pre>${lines(content)}</pre></section>`;
 }
+const commitPageSize = 2;
 function showCommits() {
-  app.innerHTML = `<ul class="list">${state.commits.map((commit) => `<li class="row"><button data-commit="${commit.id}"><strong>${escape(commit.subject)}</strong><br><small><b class="sha">${commit.id}</b> · ${escape(commit.author || 'Alice Nguyen')} · ${commit.time}</small></button><span class="stats"><b class="add">+${Math.max(1, commit.after.split('\n').length - 1)}</b> <b class="del">−${Math.max(0, commit.before.split('\n').length - 1)}</b></span></li>`).join('')}</ul>${state.file?.startsWith('commit:') ? showDiff(state.commits.find((commit) => commit.id === state.file.slice(7))) : ''}`;
+  const pages = Math.max(1, Math.ceil(state.commits.length / commitPageSize));
+  state.commitPage = Math.min(Math.max(1, state.commitPage || 1), pages);
+  const page = state.commits.slice(
+    (state.commitPage - 1) * commitPageSize,
+    state.commitPage * commitPageSize,
+  );
+  app.innerHTML = `<ul class="list">${page.map((commit) => `<li class="row"><button data-commit="${commit.id}"><strong>${escape(commit.subject)}</strong><br><small><b class="sha">${commit.id}</b> · ${escape(commit.author || 'Alice Nguyen')} · ${commit.time}</small></button><span class="stats"><b class="add">+${Math.max(1, commit.after.split('\n').length - 1)}</b> <b class="del">−${Math.max(0, commit.before.split('\n').length - 1)}</b></span></li>`).join('')}</ul>${pages > 1 ? `<nav class="pagination" aria-label="Commit pages">${state.commitPage > 1 ? '<button id="newer">Newer</button>' : ''}<small>Page ${state.commitPage} of ${pages}</small>${state.commitPage < pages ? '<button id="older">Older</button>' : ''}</nav>` : ''}${state.file?.startsWith('commit:') ? showDiff(state.commits.find((commit) => commit.id === state.file.slice(7))) : ''}`;
+  document.querySelector('#newer')?.addEventListener('click', () => {
+    state.commitPage -= 1;
+    save();
+    render();
+  });
+  document.querySelector('#older')?.addEventListener('click', () => {
+    state.commitPage += 1;
+    save();
+    render();
+  });
   document.querySelectorAll('[data-commit]').forEach((button) => {
     button.onclick = () => {
       state.file = `commit:${button.dataset.commit}`;
@@ -972,12 +1003,32 @@ function palette() {
         )
         .join('') || '<p class="muted">No demo results.</p>';
     results.querySelectorAll('[data-result]').forEach((button) => {
+      button.setAttribute('role', 'option');
       button.onclick = () => {
         closeModal();
         options[Number(button.dataset.result)].go();
         showRepository();
       };
     });
+  };
+  // Arrow keys move through results; Enter follows the highlighted one.
+  query.onkeydown = (event) => {
+    const buttons = [...results.querySelectorAll('[data-result]')];
+    if (!buttons.length) return;
+    const current = buttons.findIndex((button) => button.getAttribute('aria-selected') === 'true');
+    let next = current;
+    if (event.key === 'ArrowDown') next = Math.min(buttons.length - 1, current + 1);
+    else if (event.key === 'ArrowUp') next = Math.max(0, current - 1);
+    else if (event.key === 'Enter' && current >= 0) {
+      event.preventDefault();
+      buttons[current].click();
+      return;
+    } else return;
+    event.preventDefault();
+    buttons.forEach((button, index) =>
+      button.setAttribute('aria-selected', index === next ? 'true' : 'false'),
+    );
+    buttons[next].scrollIntoView({ block: 'nearest' });
   };
   query.oninput = update;
   update();
@@ -991,8 +1042,15 @@ function showHome(signedOut = false) {
   showPage(
     signedOut
       ? `<section class="hero"><p class="eyebrow">Local demonstration</p><h1>You are signed out.</h1><p>This static demo has no server session. Sign back in as Alice to continue with the seeded account.</p><button class="primary" id="sign-in">Sign in as Alice</button></section>`
-      : `<section class="hero"><p class="eyebrow">Git, without the clutter</p><h1>A focused home<br>for your repositories.</h1><p>Browse code, review changes as patches, fork and merge, and keep wikis and releases beside the work—without project-management machinery getting in the way.</p><div class="hero-actions"><button class="primary" id="create-repository">Create repository</button><button id="open-repository">Open paper-trail</button></div></section>`,
+      : `<section class="home-header"><div><p class="eyebrow">Welcome back, Alice Nguyen</p><h1>Your repositories</h1></div><div class="hero-actions"><button data-global="explore">Explore all · ${2 + state.forkedCopies.length}</button><button class="primary" id="create-repository">Create repository</button></div></section><div class="home-sections">${state.pinned ? `<section><h2>Pinned</h2><ul class="home-list"><li><button id="open-repository"><strong>alice/paper-trail</strong><span>A small, durable record of decisions.</span></button></li></ul></section>` : ''}<section><h2>Recently viewed</h2><ul class="home-list"><li><button data-open-repository><strong>alice/paper-trail</strong><span>Viewed ${latest().time}</span></button></li><li><button data-demo-message="This private group repository is available as seeded demo data."><strong>paper-trail/field-guide</strong><span>Viewed yesterday</span></button></li></ul></section><section><h2>Owned by you</h2><ul class="home-list"><li><button data-open-repository><strong>paper-trail</strong><span>public · A small, durable record of decisions.</span></button></li>${state.forkedCopies.map((fork) => `<li><button data-demo-message="A fork is a full copy of every branch and tag, owned by you."><strong>${escape(fork.slug.replace('alice/', ''))}</strong><span>public · forked from alice/paper-trail</span></button></li>`).join('')}</ul></section></div>`,
   );
+  document.querySelectorAll('[data-open-repository]').forEach((button) => {
+    button.onclick = showRepository;
+  });
+  document.querySelectorAll('[data-global]').forEach((button) => {
+    button.onclick = () => globalAction(button.dataset.global);
+  });
+  bindDemoMessages();
   document.querySelector('#open-repository')?.addEventListener('click', showRepository);
   document.querySelector('#sign-in')?.addEventListener('click', () => showHome());
   document
@@ -1004,18 +1062,30 @@ function showHome(signedOut = false) {
       ),
     );
 }
+let exploreQuery = '';
 function showExplore() {
+  const matches = (text) => text.toLowerCase().includes(exploreQuery.toLowerCase());
+  const hidden = (text) => (exploreQuery && !matches(text) ? ' hidden' : '');
   showPage(
-    `<section class="page-heading"><p class="eyebrow">Explore</p><h1>Repositories you can access</h1><p>Private repositories appear only when your account has permission.</p></section><section class="directory"><button class="directory-item" id="explore-repository"><span><strong>alice/paper-trail</strong><em>A small, durable record of decisions.</em><small>Public · ${state.stars + (state.starred ? 1 : 0)} stars · ${state.forks} forks</small></span><time>Updated ${latest().time}</time></button>${state.forkedCopies
+    `<section class="page-heading"><p class="eyebrow">Explore</p><h1>Repositories you can access</h1><p>Private repositories appear only when your account has permission.</p></section><form class="explore-filter" role="search"><input id="explore-query" type="search" value="${escape(exploreQuery)}" placeholder="Filter by name or description" aria-label="Filter repositories"><button type="submit">Filter</button>${exploreQuery ? '<button type="button" id="explore-clear">Clear</button>' : ''}</form><section class="directory"><button class="directory-item${hidden('alice/paper-trail A small, durable record of decisions.')}" id="explore-repository"><span><strong>alice/paper-trail</strong><em>A small, durable record of decisions.</em><small>Public · ${state.stars + (state.starred ? 1 : 0)} stars · ${state.forks} forks</small></span><time>Updated ${latest().time}</time></button>${state.forkedCopies
       .map(
         (fork) =>
-          `<button class="directory-item" data-demo-message="A fork is a full copy of every branch and tag, owned by you."><span><strong>${escape(fork.slug)}</strong><em>A small, durable record of decisions.</em><small>Public · forked from alice/paper-trail</small></span><time>Updated ${escape(fork.time)}</time></button>`,
+          `<button class="directory-item${hidden(fork.slug)}" data-demo-message="A fork is a full copy of every branch and tag, owned by you."><span><strong>${escape(fork.slug)}</strong><em>A small, durable record of decisions.</em><small>Public · forked from alice/paper-trail</small></span><time>Updated ${escape(fork.time)}</time></button>`,
       )
       .join(
         '',
-      )}<button class="directory-item" data-demo-message="This private group repository is available as seeded demo data."><span><strong>paper-trail/field-guide</strong><em>Shared conventions for clear technical decisions.</em><small>Private · member access</small></span><time>Updated yesterday</time></button></section>`,
+      )}<button class="directory-item${hidden('paper-trail/field-guide Shared conventions for clear technical decisions.')}" data-demo-message="This private group repository is available as seeded demo data."><span><strong>paper-trail/field-guide</strong><em>Shared conventions for clear technical decisions.</em><small>Private · member access</small></span><time>Updated yesterday</time></button></section>`,
   );
   document.querySelector('#explore-repository').onclick = showRepository;
+  document.querySelector('.explore-filter').onsubmit = (event) => {
+    event.preventDefault();
+    exploreQuery = document.querySelector('#explore-query').value.trim();
+    showExplore();
+  };
+  document.querySelector('#explore-clear')?.addEventListener('click', () => {
+    exploreQuery = '';
+    showExplore();
+  });
   bindDemoMessages();
 }
 const docs = {
@@ -1108,7 +1178,7 @@ function showGroups(create = false) {
 const adminSections = {
   overview: [
     'System overview',
-    `<div class="metrics"><div><strong>1</strong><span>Users</span></div><div><strong>1</strong><span>Groups</span></div><div><strong>2</strong><span>Repositories</span></div><div><strong>1</strong><span>Plugins</span></div><div><strong>1</strong><span>Sessions</span></div></div><dl class="system-list"><dt>Application</dt><dd>1.2.0</dd><dt>Node.js</dt><dd>v24 LTS</dd><dt>Git</dt><dd>git version 2.47.3</dd><dt>SQLite</dt><dd>WAL · healthy</dd><dt>Repository storage</dt><dd>Writable · 2 repositories</dd><dt>SSH</dt><dd>Enabled</dd></dl>`,
+    `<div class="metrics"><div><strong>1</strong><span>Users</span></div><div><strong>1</strong><span>Groups</span></div><div><strong>2</strong><span>Repositories</span></div><div><strong>1</strong><span>Plugins</span></div><div><strong>1</strong><span>Sessions</span></div></div><dl class="system-list"><dt>Application</dt><dd>1.2.1</dd><dt>Node.js</dt><dd>v24 LTS</dd><dt>Git</dt><dd>git version 2.47.3</dd><dt>SQLite</dt><dd>WAL · healthy</dd><dt>Repository storage</dt><dd>Writable · 2 repositories</dd><dt>SSH</dt><dd>Enabled</dd></dl>`,
   ],
   users: [
     'Users',
@@ -1236,11 +1306,6 @@ document.querySelector('#fork').onclick = () =>
     'Fork paper-trail',
     '<p>A fork copies every branch and tag into a repository you own, so you can work independently and send changes back as a patch.</p><label>Owner<select><option>alice</option><option>paper-trail</option></select></label><label>Repository name<input id="fork-slug" value="paper-trail"></label><div class="modal-actions"><button value="cancel">Cancel</button><button class="primary" type="button" id="fork-create">Create fork</button></div>',
   );
-document.querySelector('#settings').onclick = () => {
-  state.view = 'settings';
-  state.file = null;
-  render();
-};
 const themes = ['system', 'light', 'dark'];
 document.querySelector('#theme').onclick = () => {
   const current = document.documentElement.dataset.theme ?? 'system';
@@ -1282,6 +1347,12 @@ document.addEventListener('keydown', (event) => {
     palette();
   }
 });
+// Show the modifier key the viewer's platform actually uses for the command palette.
+document.querySelector('#shortcut-key').textContent = /Mac|iPhone|iPad|iPod/.test(
+  navigator.platform ?? '',
+)
+  ? '⌘K'
+  : 'Ctrl K';
 const storedTheme = localStorage.getItem('bareline-demo-theme');
 if (storedTheme && storedTheme !== 'system') document.documentElement.dataset.theme = storedTheme;
 document.querySelector('#theme').textContent = `Theme: ${storedTheme ?? 'system'}`;

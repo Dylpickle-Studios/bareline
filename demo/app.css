@@ -162,13 +162,97 @@ main {
   margin-inline: auto;
   padding: 22px 24px 50px;
 }
-.activity-link {
-  margin: 24px 0 14px;
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 14px 0;
+}
+.pagination button,
+.explore-filter button {
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+}
+.explore-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 28px;
+}
+.explore-filter input {
+  flex: 1 1 240px;
+  padding: 8px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+.home-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 40px;
+}
+.home-header h1 {
+  margin: 6px 0 0;
+  font-size: 32px;
+  letter-spacing: -0.035em;
+}
+.home-header .hero-actions {
+  margin: 0;
+}
+.home-sections {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 28px;
+  margin-top: 34px;
+}
+.home-sections h2 {
+  margin: 0 0 10px;
+  font-size: 15px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.home-list {
+  margin: 0;
   padding: 0;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.home-list li + li {
+  border-top: 1px solid var(--line);
+}
+.home-list button {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  padding: 12px 14px;
   border: 0;
-  border-bottom: 1px solid currentColor;
   background: none;
   color: var(--ink);
+  text-align: left;
+}
+.home-list button:hover strong {
+  color: var(--accent);
+}
+.home-list span {
+  color: var(--muted);
+  font-size: 13px;
+}
+.result[aria-selected='true'] {
+  background: var(--surface-subtle);
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 .breadcrumbs {
   display: flex;
@@ -1122,4 +1206,8 @@ textarea {
   .wiki-layout {
     grid-template-columns: 1fr;
   }
+}
+
+.hidden {
+  display: none;
 }

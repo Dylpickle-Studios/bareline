@@ -131,7 +131,7 @@ export function registerPluginsRoutes(context: AppRouteContext): void {
     let empty = false;
     try {
       entries = await repositories.listTree(repository, ref);
-      const submodules = await repositories.submoduleUrls(repository, ref);
+      const submodules = await runtime.submodulesFor(repositories, repository, ref, entries);
       entries = entries.map((entry) => routeHelpers.presentTreeEntry(entry, submodules));
       const readmeEntry = entries.find(
         (entry) => /^readme(?:\.md)?$/i.test(entry.name) && entry.type === 'blob',
@@ -150,6 +150,7 @@ export function registerPluginsRoutes(context: AppRouteContext): void {
                 readmeEntry.name,
                 readme,
               ),
+              runtime.markdownLinks(repository, ref, readmeEntry.name),
             );
           }
         } catch (error) {

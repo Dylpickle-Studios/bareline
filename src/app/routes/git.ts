@@ -1,6 +1,20 @@
 import type { AppRouteContext } from './route-context.js';
 import * as runtime from './route-runtime.js';
 
+/** Client transport hints that `git http-backend` understands when forwarded as CGI variables. */
+function gitTransportHeaders(headers: {
+  'content-encoding'?: string | string[] | undefined;
+  'git-protocol'?: string | string[] | undefined;
+}): { contentEncoding?: string; gitProtocol?: string } {
+  const first = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
+  const contentEncoding = first(headers['content-encoding']);
+  const gitProtocol = first(headers['git-protocol']);
+  return {
+    ...(contentEncoding ? { contentEncoding } : {}),
+    ...(gitProtocol ? { gitProtocol } : {}),
+  };
+}
+
 export function registerGitRoutes(context: AppRouteContext): void {
   const {
     app,
@@ -114,6 +128,7 @@ export function registerGitRoutes(context: AppRouteContext): void {
         pathSuffix: 'info/refs',
         ...(query.service ? { queryService: query.service } : {}),
         ...(principal ? { authenticatedUserId: principal.userId } : {}),
+        ...gitTransportHeaders(request.headers),
       },
       reply,
     );
@@ -158,6 +173,7 @@ export function registerGitRoutes(context: AppRouteContext): void {
           : {}),
         body: request.body as NodeJS.ReadableStream as import('node:stream').Readable,
         ...(principal ? { authenticatedUserId: principal.userId } : {}),
+        ...gitTransportHeaders(request.headers),
       },
       reply,
     );

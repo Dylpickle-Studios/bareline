@@ -20,6 +20,7 @@ export function presentTreeEntry(
   return {
     ...entry,
     encodedName: entry.name.split('/').map(encodeURIComponent).join('/'),
+    sizeLabel: entry.size === null ? '' : formatBytes(entry.size),
     ...(submoduleUrl ? { submoduleUrl } : {}),
     ...(submoduleUrl && /^(?:https?|ssh):\/\//i.test(submoduleUrl)
       ? { submoduleLink: submoduleUrl }
@@ -482,6 +483,21 @@ export function stringPathParameters(...names: string[]) {
     required: names,
     properties: Object.fromEntries(names.map((name) => [name, { type: 'string' }])),
   };
+}
+
+/** Human-readable byte count such as `1.2 KB`, with exact bytes below one kilobyte. */
+export function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return '';
+  if (bytes < 1000) return `${String(Math.round(bytes))} B`;
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  let value = bytes / 1000;
+  let unit = 0;
+  while (value >= 1000 && unit < units.length - 1) {
+    value /= 1000;
+    unit += 1;
+  }
+  const digits = value >= 100 ? 0 : 1;
+  return `${value.toFixed(digits)} ${units[unit] ?? ''}`;
 }
 
 export function relativeDate(input: string, now = Date.now()): string {

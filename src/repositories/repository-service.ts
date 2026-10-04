@@ -49,6 +49,8 @@ export interface RemoteImportPreview {
 
 export class RepositoryService {
   private publishEvent: RepositoryEventPublisher = () => undefined;
+  /** The hosted storage root never moves while the process runs, so resolve it once. */
+  private hostedRoot: Promise<string> | null = null;
 
   constructor(
     private readonly database: Database,
@@ -681,11 +683,13 @@ export class RepositoryService {
 
   async storagePath(repository: Repository): Promise<string> {
     const path = repository.storagePath ?? this.hostedPath(repository.storageId);
-    if (!repository.storagePath)
-      return await this.git.assertRepository(
-        path,
-        await realpath(this.config.storage.repositories),
-      );
+    if (!repository.storagePath) {
+      this.hostedRoot ??= realpath(this.config.storage.repositories).catch((error: unknown) => {
+        this.hostedRoot = null;
+        throw error;
+      });
+      return await this.git.assertRepository(path, await this.hostedRoot);
+    }
     for (const configuredRoot of this.config.storage.importRoots) {
       try {
         return await this.git.assertRepository(path, configuredRoot);

@@ -1,0 +1,19 @@
+# Keep the build context small: the Dockerfile only copies package metadata, sources, docs,
+# plugins and scripts. Everything else here is either generated or local state.
+.git
+.github
+node_modules
+dist
+coverage
+test-results
+playwright-report
+release
+data
+demo
+tests
+config.yml
+*.db
+*.db-shm
+*.db-wal
+.env
+*.log

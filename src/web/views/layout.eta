@@ -5,15 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
   <title><%= it.title ? `${it.title} · ${it.product.name}` : it.product.name %></title>
-  <link rel="stylesheet" href="/assets/app.css">
+  <link rel="icon" href="<%= it.product.logoPath %>?v=<%= it.product.version %>" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/app.css?v=<%= it.product.version %>">
   <% if (it.pluginThemeUrl) { %><link rel="stylesheet" href="<%= it.pluginThemeUrl %>"><% } %>
-  <script type="module" src="/assets/app.js"></script>
+  <script type="module" src="/assets/app.js?v=<%= it.product.version %>"></script>
 </head>
 <body>
   <a class="skip-link" href="#content">Skip to content</a>
   <header class="site-header">
     <a class="brand" href="/" aria-label="<%= it.product.name %> home">
-      <img src="<%= it.product.logoPath %>" alt="" width="28" height="28">
+      <img src="<%= it.product.logoPath %>?v=<%= it.product.version %>" alt="" width="28" height="28">
       <span><%= it.product.name %></span>
     </a>
     <nav aria-label="Global navigation">
@@ -21,7 +22,7 @@
       <a href="/docs">Docs</a>
       <% if (it.user) { %>
         <% (it.pluginNavigation ?? []).forEach(function(item) { %><a href="<%= item.href %>"><%= item.title %></a><% }) %>
-        <button class="quiet" data-palette-open aria-haspopup="dialog">Search <kbd>⌘K</kbd></button>
+        <button class="quiet" data-palette-open aria-haspopup="dialog">Search <kbd data-shortcut-key>Ctrl K</kbd></button>
         <a href="/groups">Groups</a>
         <% if (it.user.isAdmin) { %><a href="/admin">Admin</a><% } %>
         <a href="/settings/profile"><%= it.user.displayName %></a>
@@ -31,7 +32,7 @@
       <% } %>
     </nav>
   </header>
-  <main id="content"><%~ it.body %></main>
+  <main id="content"><% if (it.repositoryNavigation) { %><nav class="repo-bar" aria-label="Repository"><a class="repo-bar-title" href="<%= it.repositoryNavigation.home %>"><%= it.repositoryNavigation.label %></a><div class="repo-nav"><% it.repositoryNavigation.items.forEach(function(item) { %><a href="<%= item.href %>"<% if (item.current) { %> aria-current="page"<% } %>><%= item.label %></a><% }) %></div></nav><% } %><%~ it.body %></main>
   <footer class="site-footer"><span><%= it.product.name %> · focused Git hosting</span><nav aria-label="Footer navigation"><a href="/docs">Documentation</a><a href="/docs/security">Security</a><a href="<%= it.product.websiteUrl %>">Website</a></nav></footer>
   <dialog id="command-palette" aria-labelledby="palette-title">
     <form method="dialog" class="palette">

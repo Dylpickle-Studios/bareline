@@ -1,6 +1,7 @@
 import { Readable } from 'node:stream';
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
+import { createApp } from '../src/app/create-app.js';
 import { AuditService } from '../src/audit/audit-service.js';
 import { AuthService } from '../src/auth/auth-service.js';
 import { openDatabase } from '../src/database/database.js';
@@ -56,5 +57,57 @@ describe('local Git LFS', () => {
     expect(parseLfsPointer(pointer)).toEqual({ objectId, size: content.length });
     expect(parseLfsPointer(Buffer.from('not a pointer'))).toBeNull();
     database.close();
+  });
+
+  it('speaks the git-lfs media type over HTTP and reports errors as JSON', async () => {
+    const config = temporaryConfig();
+    const database = openDatabase(config.database.path);
+    const audit = new AuditService(database);
+    const user = await new AuthService(database, config, audit).register({
+      username: 'alice',
+      displayName: 'Alice',
+      password: 'correct horse battery staple',
+    });
+    const repositories = new RepositoryService(
+      database,
+      new GitRunner('git', 10_000, 16 * 1024 * 1024),
+      config,
+      audit,
+    );
+    await repositories.createForUser({
+      actorUserId: user.id,
+      ownerUserId: user.id,
+      slug: 'example',
+      visibility: 'public',
+    });
+    database.close();
+
+    const app = await createApp(config);
+    try {
+      const objectId = 'a'.repeat(64);
+      // The git-lfs client sends application/vnd.git-lfs+json, not application/json.
+      const batch = await app.inject({
+        method: 'POST',
+        url: '/alice/example.git/info/lfs/objects/batch',
+        headers: { 'content-type': 'application/vnd.git-lfs+json' },
+        payload: JSON.stringify({ operation: 'download', objects: [{ oid: objectId, size: 1 }] }),
+      });
+      expect(batch.statusCode).toBe(200);
+      expect(batch.headers['content-type']).toContain('application/vnd.git-lfs+json');
+      expect(batch.json()).toMatchObject({ transfer: 'basic', objects: [{ oid: objectId }] });
+
+      const invalid = await app.inject({
+        method: 'POST',
+        url: '/alice/example.git/info/lfs/objects/batch',
+        headers: { 'content-type': 'application/vnd.git-lfs+json' },
+        payload: JSON.stringify({ operation: 'download', objects: 'nope' }),
+      });
+      expect(invalid.statusCode).toBe(400);
+      expect(invalid.headers['content-type']).toContain('application/vnd.git-lfs+json');
+      expect(typeof invalid.json<{ message: unknown }>().message).toBe('string');
+      expect(invalid.body).not.toContain('<html');
+    } finally {
+      await app.close();
+    }
   });
 });

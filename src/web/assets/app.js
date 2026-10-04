@@ -1,6 +1,20 @@
 const palette = document.querySelector('#command-palette');
 const paletteInput = document.querySelector('#palette-search');
 
+// Show the modifier key the viewer's platform actually uses for the command palette.
+const isApplePlatform = /Mac|iPhone|iPad|iPod/.test(navigator.platform ?? '');
+document.querySelectorAll('[data-shortcut-key]').forEach((element) => {
+  element.textContent = isApplePlatform ? '⌘K' : 'Ctrl K';
+});
+
+// Reference pickers switch as soon as a branch or tag is chosen; the submit button stays for
+// keyboard users and browsers without scripting.
+document.querySelectorAll('form.ref-selector select[name="ref"]').forEach((select) => {
+  select.addEventListener('change', () => {
+    if (select instanceof HTMLSelectElement && select.form) select.form.requestSubmit();
+  });
+});
+
 const markdownPreview = document.querySelector('[data-markdown-preview]');
 if (markdownPreview instanceof HTMLElement) {
   const editor = document.querySelector('#file-editor');
@@ -73,6 +87,27 @@ document.addEventListener('keydown', (event) => {
     event.preventDefault();
     openPalette();
   }
+});
+
+// Arrow keys move through palette results; Enter follows the highlighted one.
+paletteInput?.addEventListener('keydown', (event) => {
+  const options = [...document.querySelectorAll('#palette-results [role="option"]')];
+  if (!options.length) return;
+  const current = options.findIndex((option) => option.getAttribute('aria-selected') === 'true');
+  let next = current;
+  if (event.key === 'ArrowDown') next = Math.min(options.length - 1, current + 1);
+  else if (event.key === 'ArrowUp') next = Math.max(0, current - 1);
+  else if (event.key === 'Enter' && current >= 0) {
+    event.preventDefault();
+    const option = options[current];
+    if (option instanceof HTMLAnchorElement) option.click();
+    return;
+  } else return;
+  event.preventDefault();
+  options.forEach((option, index) => {
+    option.setAttribute('aria-selected', index === next ? 'true' : 'false');
+  });
+  options[next]?.scrollIntoView({ block: 'nearest' });
 });
 
 const playgroundRun = document.querySelector('#playground-run');

@@ -58,7 +58,7 @@ into service. The release workflow publishes the archive, its SHA-256 sidecar, a
 the SBOM with its own Sigstore bundle:
 
 ```sh
-RELEASE_TAG=v1.2.0
+RELEASE_TAG=v1.2.1
 ARCHIVE="bareline-${RELEASE_TAG}-linux-x64.tar.gz"
 sha256sum -c "${ARCHIVE}.sha256"
 cosign verify-blob "$ARCHIVE" \

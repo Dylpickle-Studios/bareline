@@ -20,6 +20,11 @@ export interface CommitSummary {
   authoredAt: string;
 }
 
+export interface CommitPage {
+  commits: CommitSummary[];
+  hasNext: boolean;
+}
+
 export interface RefSummary {
   name: string;
   objectId: string;
@@ -103,20 +108,36 @@ export class GitBrowser {
     page = 1,
     pageSize = 30,
   ): Promise<CommitSummary[]> {
+    return (await this.commitPage(repository, ref, page, pageSize)).commits;
+  }
+
+  /** One page of history plus whether a later page exists, for pagination controls. */
+  async commitPage(
+    repository: Repository,
+    ref: string,
+    page = 1,
+    pageSize = 30,
+    file?: string,
+  ): Promise<CommitPage> {
     validateRef(ref);
+    const safeFile = file === undefined ? null : validateRepoPath(file);
     const path = await this.repositories.storagePath(repository);
-    const offset = Math.max(0, page - 1) * pageSize;
+    const limit = Math.min(Math.max(pageSize, 1), 100);
+    const offset = Math.max(0, page - 1) * limit;
     const result = await this.git.run([
       '--git-dir',
       path,
       'log',
-      `--max-count=${String(Math.min(pageSize, 100))}`,
+      // Fetch one extra commit so the caller knows whether a next page exists.
+      `--max-count=${String(limit + 1)}`,
       `--skip=${String(offset)}`,
       '--format=%H%x00%h%x00%an%x00%ae%x00%aI%x00%s%x00',
       '--end-of-options',
       ref,
+      ...(safeFile === null ? [] : ['--', safeFile]),
     ]);
-    return parseCommits(result.stdout);
+    const commits = parseCommits(result.stdout);
+    return { commits: commits.slice(0, limit), hasNext: commits.length > limit };
   }
 
   async fileHistory(
@@ -126,31 +147,22 @@ export class GitBrowser {
     page = 1,
     pageSize = 30,
   ): Promise<CommitSummary[]> {
-    validateRef(ref);
-    const safeFile = validateRepoPath(file);
-    const path = await this.repositories.storagePath(repository);
-    const offset = Math.max(0, page - 1) * pageSize;
-    const result = await this.git.run([
-      '--git-dir',
-      path,
-      'log',
-      `--max-count=${String(Math.min(pageSize, 100))}`,
-      `--skip=${String(offset)}`,
-      '--format=%H%x00%h%x00%an%x00%ae%x00%aI%x00%s%x00',
-      '--end-of-options',
-      ref,
-      '--',
-      safeFile,
-    ]);
-    return parseCommits(result.stdout);
+    return (await this.commitPage(repository, ref, page, pageSize, file)).commits;
   }
 
   async branches(repository: Repository): Promise<RefSummary[]> {
     return await this.refs(repository, 'refs/heads');
   }
 
-  async tags(repository: Repository): Promise<RefSummary[]> {
-    return await this.refs(repository, 'refs/tags');
+  /**
+   * Tag signature verification spawns one `git verify-tag` per signed tag, so it is only
+   * requested by the Tags page itself; reference pickers and search indexing skip it.
+   */
+  async tags(
+    repository: Repository,
+    options: { verifySignatures?: boolean } = {},
+  ): Promise<RefSummary[]> {
+    return await this.refs(repository, 'refs/tags', options.verifySignatures ?? false);
   }
 
   async commit(
@@ -386,7 +398,11 @@ export class GitBrowser {
     return parseBlame(result.stdout.toString('utf8'));
   }
 
-  private async refs(repository: Repository, prefix: string): Promise<RefSummary[]> {
+  private async refs(
+    repository: Repository,
+    prefix: string,
+    verifySignatures = false,
+  ): Promise<RefSummary[]> {
     const path = await this.repositories.storagePath(repository);
     const result = await this.git.run([
       '--git-dir',
@@ -409,7 +425,7 @@ export class GitBrowser {
       let signature: SignatureInfo | null = null;
       if (prefix === 'refs/tags') {
         if (!signaturePresent) signature = signatureInfo('N');
-        else if (verifiedTags < 50) {
+        else if (verifySignatures && verifiedTags < 50) {
           signature = await this.verifyTagSignature(path, tagObjectId);
           verifiedTags += 1;
         } else signature = signatureInfo('?');

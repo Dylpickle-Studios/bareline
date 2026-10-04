@@ -1,5 +1,6 @@
 import { WebhookService } from '../src/webhooks/webhook-service.js';
 import { access, mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { gzipSync } from 'node:zlib';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -137,6 +138,78 @@ describe('Git Smart HTTP', () => {
       expect(commits[0]?.subject).toBe('Pushed over HTTPS');
       await expect(access(hookMarker)).rejects.toMatchObject({ code: 'ENOENT' });
       verificationDatabase.close();
+    } finally {
+      await app.close();
+    }
+  }, 30_000);
+
+  it('accepts gzip-encoded request bodies and forwards the protocol v2 header', async () => {
+    const config = temporaryConfig();
+    const database = openDatabase(config.database.path);
+    const audit = new AuditService(database);
+    const auth = new AuthService(database, config, audit);
+    const git = new GitRunner('git', 15_000, 16 * 1024 * 1024);
+    const user = await auth.register({
+      username: 'alice',
+      displayName: 'Alice',
+      password: 'correct horse battery staple',
+    });
+    const repositories = new RepositoryService(database, git, config, audit);
+    const repository = await repositories.createForUser({
+      actorUserId: user.id,
+      ownerUserId: user.id,
+      slug: 'public-example',
+      visibility: 'public',
+      initializeReadme: true,
+    });
+    const head = (
+      await git.run(['--git-dir', await repositories.storagePath(repository), 'rev-parse', 'HEAD'])
+    ).stdout
+      .toString('ascii')
+      .trim();
+    database.close();
+
+    const app = await createApp(config);
+    const address = await app.listen({ host: '127.0.0.1', port: 0 });
+    const pkt = (line: string) => (line.length + 4).toString(16).padStart(4, '0') + line;
+    try {
+      // Git compresses upload-pack negotiation bodies larger than 1 KiB; the server must tell
+      // http-backend about the encoding or the packfile request is unreadable.
+      const negotiation = Buffer.from(`${pkt(`want ${head}\n`)}0000${pkt('done\n')}`);
+      const compressed = await fetch(`${address}/alice/public-example.git/git-upload-pack`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-git-upload-pack-request',
+          'content-encoding': 'gzip',
+        },
+        body: gzipSync(negotiation),
+      });
+      expect(compressed.status).toBe(200);
+      const packfile = Buffer.from(await compressed.arrayBuffer());
+      expect(packfile.subarray(0, 8).toString('ascii')).toBe('0008NAK\n');
+      expect(packfile.includes(Buffer.from('PACK'))).toBe(true);
+
+      // Protocol v2 only works when the Git-Protocol header reaches http-backend.
+      const lsRefs = await fetch(`${address}/alice/public-example.git/git-upload-pack`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-git-upload-pack-request',
+          'git-protocol': 'version=2',
+        },
+        body: Buffer.from(`${pkt('command=ls-refs\n')}0000`),
+      });
+      expect(lsRefs.status).toBe(200);
+      expect(await lsRefs.text()).toContain(`${head} refs/heads/main`);
+
+      const unsupported = await fetch(`${address}/alice/public-example.git/git-upload-pack`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-git-upload-pack-request',
+          'content-encoding': 'br',
+        },
+        body: negotiation,
+      });
+      expect(unsupported.status).toBe(415);
     } finally {
       await app.close();
     }

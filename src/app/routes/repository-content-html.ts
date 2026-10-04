@@ -168,10 +168,9 @@ export function registerRepositoryContentHtmlRoutes(context: AppRouteContext): v
     const query = request.query as { ref?: string };
     const directory = parameters['*'];
     const ref = query.ref ?? repository.defaultBranch;
-    const submodules = await repositories.submoduleUrls(repository, ref);
-    const entries = (await repositories.listTree(repository, ref, directory)).map((entry) =>
-      routeHelpers.presentTreeEntry(entry, submodules),
-    );
+    const listed = await repositories.listTree(repository, ref, directory);
+    const submodules = await runtime.submodulesFor(repositories, repository, ref, listed);
+    const entries = listed.map((entry) => routeHelpers.presentTreeEntry(entry, submodules));
     return reply.type('text/html').send(
       await render('tree', {
         user: current?.user ?? null,
@@ -206,6 +205,7 @@ export function registerRepositoryContentHtmlRoutes(context: AppRouteContext): v
           encodedPath: path.split('/').map(encodeURIComponent).join('/'),
           breadcrumbs: runtime.breadcrumbs(path),
           size: error.bytes,
+          sizeLabel: error.bytes === null ? '' : routeHelpers.formatBytes(error.bytes),
           kind: 'too-large',
           canLoadLarge:
             query.large !== '1' &&
@@ -231,6 +231,7 @@ export function registerRepositoryContentHtmlRoutes(context: AppRouteContext): v
         encodedPath: path.split('/').map(encodeURIComponent).join('/'),
         breadcrumbs: runtime.breadcrumbs(path),
         size: content.length,
+        sizeLabel: routeHelpers.formatBytes(content.length),
         ...(await referenceOptions(repository)),
         imageMetadata: image ? runtime.imageMetadata(content, path) : null,
         kind: lfsPointer
@@ -253,6 +254,7 @@ export function registerRepositoryContentHtmlRoutes(context: AppRouteContext): v
                 path,
                 content.toString('utf8'),
               ),
+              runtime.markdownLinks(repository, ref, path),
             )
           : '',
         lines: !binary && !markdown ? runtime.highlightSource(content.toString('utf8'), path) : [],
@@ -300,7 +302,8 @@ export function registerRepositoryContentHtmlRoutes(context: AppRouteContext): v
     const query = request.query as { page?: string; ref?: string };
     const page = Math.max(1, Number.parseInt(query.page ?? '1', 10) || 1);
     const ref = query.ref ?? repository.defaultBranch;
-    const commits = (await browser.commits(repository, ref, page)).map((commit) => ({
+    const history = await browser.commitPage(repository, ref, page);
+    const commits = history.commits.map((commit) => ({
       ...withAuthorAvatar(commit),
       relativeDate: routeHelpers.relativeDate(commit.authoredAt),
     }));
@@ -311,6 +314,7 @@ export function registerRepositoryContentHtmlRoutes(context: AppRouteContext): v
         commits,
         ref,
         page,
+        hasNext: history.hasNext,
         ...(await referenceOptions(repository)),
       }),
     );
@@ -323,7 +327,8 @@ export function registerRepositoryContentHtmlRoutes(context: AppRouteContext): v
     const page = Math.max(1, Number.parseInt(query.page ?? '1', 10) || 1);
     const ref = query.ref ?? repository.defaultBranch;
     const path = parameters['*'];
-    const commits = (await browser.fileHistory(repository, ref, path, page)).map((commit) => ({
+    const history = await browser.commitPage(repository, ref, page, 30, path);
+    const commits = history.commits.map((commit) => ({
       ...withAuthorAvatar(commit),
       relativeDate: routeHelpers.relativeDate(commit.authoredAt),
     }));
@@ -336,6 +341,7 @@ export function registerRepositoryContentHtmlRoutes(context: AppRouteContext): v
         commits,
         ref,
         page,
+        hasNext: history.hasNext,
         ...(await referenceOptions(repository)),
       }),
     );
@@ -518,7 +524,7 @@ export function registerRepositoryContentHtmlRoutes(context: AppRouteContext): v
 
   app.get('/:owner/:repository/tags', async (request, reply) => {
     const { repository, current } = readableRepository(request);
-    const refs = (await browser.tags(repository)).map((ref) => {
+    const refs = (await browser.tags(repository, { verifySignatures: true })).map((ref) => {
       const trustedIdentity = enhancements.trustedIdentity(ref.signature?.fingerprint);
       return {
         ...ref,

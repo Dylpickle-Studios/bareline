@@ -16,6 +16,11 @@ export function registerCoreRoutes(context: AppRouteContext): void {
     const accessible = current ? repositories.listAccessible(current.user.id, 1, 100) : [];
     const pinned = current ? new Set(enhancements.pinnedIds(current.user.id)) : new Set<number>();
     const recentOrder = current ? enhancements.recentIds(current.user.id) : [];
+    const own = current
+      ? accessible.filter(
+          (repository) => repository.ownerType === 'user' && repository.ownerId === current.user.id,
+        )
+      : [];
     return reply.type('text/html').send(
       await render('home', {
         user: current?.user ?? null,
@@ -23,17 +28,30 @@ export function registerCoreRoutes(context: AppRouteContext): void {
         recentRepositories: recentOrder
           .map((id) => accessible.find((repository) => repository.id === id))
           .filter(Boolean),
+        ownRepositories: own,
+        accessibleCount: accessible.length,
       }),
     );
   });
 
   app.get('/explore', async (request, reply) => {
     const current = session(request);
-    const repositoriesPage = repositories.listAccessible(current?.user.id ?? null, 1, 100);
+    const query = request.query as { q?: string; page?: string };
+    const search = (query.q ?? '').trim().slice(0, 100);
+    const page = Math.max(1, Number.parseInt(query.page ?? '1', 10) || 1);
+    const pageSize = 50;
+    // Ask for one extra row so the page knows whether a next page exists.
+    const listed = repositories.listAccessible(current?.user.id ?? null, page, pageSize + 1, {
+      ...(search ? { query: search } : {}),
+    });
     return reply.type('text/html').send(
       await render('explore', {
+        title: 'Explore',
         user: current?.user ?? null,
-        repositories: repositoriesPage,
+        repositories: listed.slice(0, pageSize),
+        query: search,
+        page,
+        hasNext: listed.length > pageSize,
       }),
     );
   });

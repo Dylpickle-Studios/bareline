@@ -254,7 +254,7 @@ export function registerNavigationRoutes(context: AppRouteContext): void {
           keywords: 'install clone push git',
         },
         {
-          title: 'Plugin runtime.documentation',
+          title: 'Plugin documentation',
           subtitle: 'Documentation',
           url: '/docs/plugins',
           keywords: 'plugin sdk manifest permissions',

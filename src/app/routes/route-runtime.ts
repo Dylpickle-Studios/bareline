@@ -1,4 +1,7 @@
 import type { AppConfig } from '../../config/config.js';
+import type { RepositoryService } from '../../repositories/repository-service.js';
+import type { Repository, TreeEntry } from '../../repositories/repository-types.js';
+import type { MarkdownLinkContext } from '../../web/markdown.js';
 
 export { CsrfError } from '../../auth/auth-service.js';
 export type { AuthenticationResponseJSON, RegistrationResponseJSON } from '@simplewebauthn/server';
@@ -64,7 +67,7 @@ export { parseLfsPointer } from '../../lfs/lfs-pointer.js';
 export { examplePluginArchive } from '../../plugins/example-download.js';
 export { PluginManager } from '../../plugins/plugin-manager.js';
 export type { RepositoryService } from '../../repositories/repository-service.js';
-export type { Visibility } from '../../repositories/repository-types.js';
+export type { Repository, TreeEntry, Visibility } from '../../repositories/repository-types.js';
 export {
   AuthorizationError,
   NotFoundError,
@@ -80,7 +83,7 @@ export {
   isSafeImage,
   safeInlineMime,
 } from '../../web/file-presentation.js';
-export { renderMarkdown } from '../../web/markdown.js';
+export { renderMarkdown, type MarkdownLinkContext } from '../../web/markdown.js';
 export { highlightSource } from '../../web/syntax.js';
 export { product } from '../metadata.js';
 
@@ -92,6 +95,36 @@ export function cookieOptions(config: AppConfig, httpOnly: boolean) {
     httpOnly,
     sameSite: 'lax' as const,
     secure: config.server.publicUrl.startsWith('https://'),
+  };
+}
+
+/**
+ * `.gitmodules` is only consulted when a listing actually contains a submodule entry, which
+ * saves three Git subprocesses on every ordinary directory view.
+ */
+export async function submodulesFor(
+  repositories: RepositoryService,
+  repository: Repository,
+  ref: string,
+  entries: readonly TreeEntry[],
+): Promise<Map<string, string>> {
+  return entries.some((entry) => entry.type === 'commit')
+    ? await repositories.submoduleUrls(repository, ref)
+    : new Map();
+}
+
+/** Link context so relative links and images in a rendered Markdown file resolve to Bareline. */
+export function markdownLinks(
+  repository: Repository,
+  ref: string,
+  filePath: string,
+): MarkdownLinkContext {
+  const home = `/${repository.ownerSlug}/${repository.slug}`;
+  return {
+    blobBase: `${home}/blob`,
+    rawBase: `${home}/raw`,
+    query: `?ref=${encodeURIComponent(ref)}`,
+    directory: filePath.split('/').slice(0, -1).join('/'),
   };
 }
 

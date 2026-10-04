@@ -33,7 +33,49 @@ markdown.renderer.rules.heading_open = (tokens, index, _options, environment) =>
   return `<${token.tag} id="${markdown.utils.escapeHtml(anchor)}"><a href="#${markdown.utils.escapeHtml(anchor)}" class="heading-anchor" aria-label="Link to this heading">#</a> `;
 };
 
-export function renderMarkdown(source: string): string {
+export interface MarkdownLinkContext {
+  /** URL prefix for repository files, e.g. `/alice/example/blob`. */
+  blobBase: string;
+  /** URL prefix for raw file content, e.g. `/alice/example/raw`. */
+  rawBase: string;
+  /** Query string appended to rewritten links, e.g. `?ref=main`. */
+  query: string;
+  /** Directory (no leading or trailing slash) that relative paths are resolved against. */
+  directory: string;
+}
+
+/**
+ * Resolves a Markdown link target that is relative to a file in the repository into a Bareline
+ * URL. Absolute URLs, fragments, and site-absolute paths are returned unchanged.
+ */
+export function resolveRepositoryLink(
+  target: string,
+  context: MarkdownLinkContext,
+  kind: 'blob' | 'raw',
+): string {
+  if (
+    target === '' ||
+    target.startsWith('#') ||
+    target.startsWith('/') ||
+    /^[a-z][a-z0-9+.-]*:/i.test(target)
+  )
+    return target;
+  let resolved: URL;
+  try {
+    resolved = new URL(
+      target,
+      `http://repository.invalid/${context.directory ? `${context.directory}/` : ''}`,
+    );
+  } catch {
+    return target;
+  }
+  const path = resolved.pathname.replace(/^\/+/, '');
+  if (!path) return target;
+  const base = kind === 'raw' ? context.rawBase : context.blobBase;
+  return `${base}/${path}${context.query}${resolved.hash}`;
+}
+
+export function renderMarkdown(source: string, links?: MarkdownLinkContext): string {
   const rendered = markdown.render(source, {});
   return sanitizeHtml(rendered, {
     allowedTags: [
@@ -82,11 +124,27 @@ export function renderMarkdown(source: string): string {
     allowedSchemesByTag: { img: ['http', 'https'] },
     allowProtocolRelative: false,
     transformTags: {
-      a: (_tagName, attributes) => ({
-        tagName: 'a',
+      a: (_tagName, attributes) => {
+        const href =
+          links && attributes.href !== undefined
+            ? resolveRepositoryLink(attributes.href, links, 'blob')
+            : attributes.href;
+        return {
+          tagName: 'a',
+          attribs: {
+            ...attributes,
+            ...(href === undefined ? {} : { href }),
+            ...(href?.startsWith('http') ? { rel: 'nofollow noreferrer noopener' } : {}),
+          },
+        };
+      },
+      img: (_tagName, attributes) => ({
+        tagName: 'img',
         attribs: {
           ...attributes,
-          ...(attributes.href?.startsWith('http') ? { rel: 'nofollow noreferrer noopener' } : {}),
+          ...(links && attributes.src !== undefined
+            ? { src: resolveRepositoryLink(attributes.src, links, 'raw') }
+            : {}),
         },
       }),
     },

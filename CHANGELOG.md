@@ -2,9 +2,38 @@
 
 All notable changes follow Keep a Changelog. This project uses semantic versioning after 1.0.
 
-## [Unreleased]
+## [1.2.1] - 2026-10-02
+
+### Added
+
+- One shared repository tab bar (Code, Commits, Branches, Tags, Compare, Patches, Releases, Wiki,
+  Insights, Issues, Activity, plugin tabs, and Settings when permitted) on every repository page,
+  with the active tab marked and page titles that name the repository and file.
+- Older/Newer paging for commit history and file history; a name/description filter and paging on
+  Explore; owned, pinned, and recently viewed repositories on the signed-in home page.
+- Relative links and images in rendered Markdown resolve to the file at the viewed ref.
+- Human-readable file sizes and line counts, a parent-directory entry in directory views, a
+  platform-aware command palette hint with arrow-key result navigation, and reference pickers that
+  switch as soon as a branch or tag is chosen.
+- `.dockerignore`, so container builds no longer upload `node_modules`, `.git`, or local data.
+
+### Changed
+
+- Tag signature verification runs only for the Tags page instead of on every page that renders a
+  branch/tag picker; `.gitmodules` is read only when a directory contains a submodule; the hosted
+  storage root is resolved once per process.
+- Static assets carry the product version in their URL and are cached immutably for a year in
+  production; `/assets/` requests no longer count against the rate limit.
+- Client-side request failures (401/403/404/4xx) are logged at `warn` without a stack trace.
 
 ### Fixed
+
+- Git Smart HTTP forwards `Content-Encoding: gzip` and `Git-Protocol` to `git http-backend`, so
+  compressed upload-pack negotiation (which Git uses for bodies over 1 KiB) no longer fails and
+  wire protocol v2 is used when the client offers it.
+- The Git LFS batch endpoint accepts the `application/vnd.git-lfs+json` media type the `git-lfs`
+  client sends, and LFS routes return JSON error documents instead of HTML pages.
+- The command palette entry "Plugin runtime.documentation" is named "Plugin documentation".
 
 - Require verified LFS uploads before linking objects from another repository; bind OIDC
   transactions to their initiating browser and normalize local login return paths.
